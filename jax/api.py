@@ -46,6 +46,8 @@ from . import dtypes
 from .core import eval_jaxpr
 from .api_util import (wraps, flatten_fun, apply_flat_fun, flatten_fun_nokwargs,
                        flatten_fun_nokwargs2)
+from .refs import (tree_load, tree_store, collect, inject, functionalize_refs,
+                   functionalize_refs_splatted)
 from .tree_util import (tree_map, tree_flatten, tree_unflatten, tree_structure,
                         tree_transpose, tree_leaves, tree_multimap,
                         _replace_nones)
@@ -84,7 +86,7 @@ class _ThreadLocalState(threading.local):
 
 _thread_local_state = _ThreadLocalState()
 
-def jit(fun, static_argnums=(), device=None, backend=None):
+def jit(fun, static_argnums=(), device=None, backend=None, refs=None):
   """Sets up `fun` for just-in-time compilation with XLA.
 
   Args:
@@ -108,6 +110,9 @@ def jit(fun, static_argnums=(), device=None, backend=None):
       XLA's DeviceAssignment logic and is usually to use ``jax.devices()[0]``.
     backend: This is an experimental feature and the API is likely to change.
       Optional, a string representing the xla backend. 'cpu','gpu', or 'tpu'.
+    refs: This is an experimental feature whose API is subject to change.
+      Optional, a pytree of `Ref` objects whose `load`s and `store`s will
+      be preserved in the jitted function.
 
   Returns:
     A wrapped version of `fun`, set up for just-in-time compilation.
@@ -143,11 +148,15 @@ def jit(fun, static_argnums=(), device=None, backend=None):
       f, dyn_args = _argnums_partial(f, dyn_argnums, args)
     else:
       dyn_args = args
-    args_flat, in_tree = tree_flatten((dyn_args, kwargs))
+    ref_vals = tree_load(refs, allow_no_value=True)
+    f = functionalize_refs_splatted(f, refs)
+    args_flat, in_tree = tree_flatten(((ref_vals, *dyn_args), kwargs))
     _check_args(args_flat)
     flat_fun, out_tree = flatten_fun(f, in_tree)
-    out = xla.xla_call(flat_fun, *args_flat, device=device, backend=backend)
-    return tree_unflatten(out_tree(), out)
+    out_flat = xla.xla_call(flat_fun, *args_flat, device=device, backend=backend)
+    out, ref_vals = tree_unflatten(out_tree(), out_flat)
+    tree_store(refs, ref_vals)
+    return out
 
   jitted_name =  "jit({}, static_argnums={})"
   f_jitted.__name__ = jitted_name.format(f_jitted.__name__, static_argnums)
@@ -311,7 +320,7 @@ def xla_computation(fun, static_argnums=(), axis_env=None, backend=None,
     return c.Build(c.Tuple(*outs))
   return computation_maker
 
-def grad(fun, argnums=0, has_aux=False, holomorphic=False):
+def grad(fun, argnums=0, has_aux=False, holomorphic=False, refs=None):
   """Creates a function which evaluates the gradient of `fun`.
 
   Args:
@@ -326,6 +335,10 @@ def grad(fun, argnums=0, has_aux=False, holomorphic=False):
       differentiated and the second element is auxiliary data. Default False.
     holomorphic: Optional, bool. Indicates whether `fun` is promised to be
       holomorphic. Default False.
+    refs: This is an experimental feature whose API is subject to change.
+      Optional, a pytree of `Ref` objects whose `load`s and `store`s will
+      be preserved in the gradient function. To differentiate with respect to
+      `Ref` values, use `inject`.
 
   Returns:
     A function with the same arguments as `fun`, that evaluates the gradient of
@@ -361,7 +374,7 @@ def grad(fun, argnums=0, has_aux=False, holomorphic=False):
 
   return grad_f_aux if has_aux else grad_f
 
-def value_and_grad(fun, argnums=0, has_aux=False, holomorphic=False):
+def value_and_grad(fun, argnums=0, has_aux=False, holomorphic=False, refs=None):
   """Creates a function which evaluates both `fun` and the gradient of `fun`.
 
   Args:
@@ -376,6 +389,10 @@ def value_and_grad(fun, argnums=0, has_aux=False, holomorphic=False):
      differentiated and the second element is auxiliary data. Default False.
     holomorphic: Optional, bool. Indicates whether `fun` is promised to be
       holomorphic. Default False.
+    refs: This is an experimental feature whose API is subject to change.
+      Optional, a pytree of `Ref` objects whose `load`s and `store`s will
+      be preserved in the resulting function. To differentiate with respect to
+      `Ref` values, use `inject`.
 
   Returns:
     A function with the same arguments as `fun` that evaluates both `fun` and
@@ -405,9 +422,15 @@ def value_and_grad(fun, argnums=0, has_aux=False, holomorphic=False):
 
     f = lu.wrap_init(fun, kwargs)
     f_partial, dyn_args = _argnums_partial(f, argnums, args)
+    ref_vals = tree_load(refs, allow_no_value=True)
     if not has_aux:
-      ans, vjp_py = vjp(f_partial, *dyn_args)
+      f = functionalize_refs_splatted(f_partial, refs)
+      ans, vjp_py, ref_vals = vjp(f, ref_vals, *dyn_args, has_aux=True)
+      tree_store(refs, ref_vals)
     else:
+      if refs is not None:
+        raise NotImplementedError(
+            "Using has_args together with refs is not supported")
       ans, vjp_py, aux = vjp(f_partial, *dyn_args, has_aux=True)
     _check_scalar(ans)
     dtype = dtypes.result_type(ans)
@@ -417,10 +440,11 @@ def value_and_grad(fun, argnums=0, has_aux=False, holomorphic=False):
              "differentiation, pass holomorphic=True.")
       raise TypeError(msg.format(dtype))
     g = vjp_py(onp.ones((), dtype=dtype))
-    g = g[0] if isinstance(argnums, int) else g
     if not has_aux:
+      g = g[1] if isinstance(argnums, int) else g[1:]
       return ans, g
     else:
+      g = g[0] if isinstance(argnums, int) else g
       return (ans, aux), g
 
   return value_and_grad_f
@@ -578,7 +602,7 @@ def _dtype(x):
   return dtypes.canonicalize_dtype(dtypes.result_type(x))
 
 
-def vmap(fun, in_axes=0, out_axes=0):
+def vmap(fun, in_axes=0, out_axes=0, refs=None, ref_axes=None):
   """Vectorizing map. Creates a function which maps `fun` over argument axes.
 
   Args:
@@ -598,6 +622,14 @@ def vmap(fun, in_axes=0, out_axes=0):
     out_axes: A nonnegative integer, None, or (nested) standard Python container
       (tuple/list/dict) thereof indicating where the mapped axis should appear
       in the output.
+    refs:  This is an experimental feature whose API is subject to change.
+      Optional, a pytree of `Ref` objects whose `load`s and `store`s will
+      be preserved in the resulting function. To map over an axis of one or more
+      of `refs`, use `ref_axes`.
+    ref_axes: This is an experimental feature whose API is subject to change.
+      Optional, a nonnegative integer, None, or pytree thereof specifying which
+      array axes of `refs` to map over. If `ref_axes` is a pytree, it must
+      be a pytree prefix of `refs`.
 
   Returns:
     Batched/vectorized version of ``fun`` with arguments that correspond to
@@ -663,6 +695,8 @@ def vmap(fun, in_axes=0, out_axes=0):
       # in which case we can produce an error message based on argument indices,
       # or if it has nested containers.
       # TODO(mattjj,phawkins): add a way to inspect pytree kind more directly
+      if tree.children()[0] == tree_flatten(None)[1]:
+        tree = tree.children()[1]
       if tree == tree_flatten((core.unit,) * tree.num_leaves)[1]:
         lines1 = ["arg {} has shape {} and axis {} is to be mapped"
                   .format(i, x.shape, d) for i, (x, d) in enumerate(zip(vals, dims))]
@@ -685,14 +719,19 @@ def vmap(fun, in_axes=0, out_axes=0):
 
   @wraps(fun, docstr=docstr)
   def batched_fun(*args):
-    args_flat, in_tree  = tree_flatten(args)
+    ref_vals = tree_load(refs, allow_no_value=True)
+    args_flat, in_tree = tree_flatten((ref_vals, args))
     f = lu.wrap_init(fun)
+    f = functionalize_refs(f, refs)
     flat_fun, out_tree = flatten_fun_nokwargs(f, in_tree)
-    in_axes_flat = _flatten_axes(in_tree, in_axes)
+    in_axes_flat = _flatten_axes(in_tree, (ref_axes, in_axes))
     _check_axis_sizes(in_tree, args_flat, in_axes_flat)
-    out_flat = batching.batch(flat_fun, args_flat, in_axes_flat,
-                              lambda: _flatten_axes(out_tree(), out_axes))
-    return tree_unflatten(out_tree(), out_flat)
+    out_flat = batching.batch(
+        flat_fun, args_flat, in_axes_flat,lambda: _flatten_axes(
+            out_tree(), (out_axes, ref_axes)))
+    out, ref_vals = tree_unflatten(out_tree(), out_flat)
+    tree_store(refs, ref_vals)
+    return out
 
   return batched_fun
 
@@ -1066,7 +1105,7 @@ def _shape_spec_consistent(spec, expr):
   return all(a == b for a, b in zip(spec, expr) if a is not masking.monomorphic_dim)
 
 
-def jvp(fun, primals, tangents):
+def jvp(fun, primals, tangents, refs=None):
   """Computes a (forward-mode) Jacobian-vector product of `fun`.
 
   Args:
@@ -1079,6 +1118,11 @@ def jvp(fun, primals, tangents):
     tangents: The tangent vector for which the Jacobian-vector product should be
       evaluated. Should be either a tuple or a list of tangents, with the same
       tree structure and array shapes as `primals`.
+    refs: This is an experimental feature whose API is subject to change.
+      Optional, a pytree of `Ref` objects whose `load`s and `store`s will
+      be preserved in the resulting derivative function. To differentiate `Ref`
+      values, or to differentiate with respect to `Ref` values, use `collect` or
+      `inject` to lift them to explicit results or arguments.
 
   Returns:
     A `(primals_out, tangents_out)` pair, where `primals_out` is
@@ -1103,8 +1147,10 @@ def jvp(fun, primals, tangents):
            "found {} and {}.")
     raise TypeError(msg.format(type(primals).__name__, type(tangents).__name__))
 
-  ps_flat, tree_def = tree_flatten(primals)
-  ts_flat, tree_def_2 = tree_flatten(tangents)
+  ref_vals = tree_load(refs, allow_no_value=True)
+  ref_tangents = tree_map(lambda x: ad.zero, ref_vals)
+  ps_flat, tree_def = tree_flatten((ref_vals, primals))
+  ts_flat, tree_def_2 = tree_flatten((ref_tangents, tangents))
   if tree_def != tree_def_2:
     msg = ("primal and tangent arguments to jax.jvp must have the same tree "
            "structure; primals have tree structure {} whereas tangents have "
@@ -1115,10 +1161,13 @@ def jvp(fun, primals, tangents):
       msg = ("primal and tangent arguments to jax.jvp must have equal types; "
              "type mismatch primal {} vs tangent {}")
       raise TypeError(msg.format(_dtype(p), _dtype(t)))
+  fun = functionalize_refs(fun, refs)
   flat_fun, out_tree = flatten_fun_nokwargs(fun, tree_def)
-  out_primals, out_tangents = ad.jvp(flat_fun).call_wrapped(ps_flat, ts_flat)
-  return (tree_unflatten(out_tree(), out_primals),
-          tree_unflatten(out_tree(), out_tangents))
+  out_ps_flat, out_ts_flat = ad.jvp(flat_fun).call_wrapped(ps_flat, ts_flat)
+  out_primals, ref_vals = tree_unflatten(out_tree(), out_ps_flat)
+  out_tangents, _ = tree_unflatten(out_tree(), out_ts_flat)
+  tree_store(refs, ref_vals)
+  return out_primals, out_tangents
 
 def linearize(fun, *primals):
   """Produce a linear approximation to `fun` using `jvp` and partial evaluation.
