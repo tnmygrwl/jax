@@ -99,8 +99,7 @@ def _bit_stats(bits):
 
 def _threefry2x32_abstract_eval(*args):
   if any(a.dtype != np.uint32 for a in args):
-    raise TypeError("Arguments to threefry2x32 must have uint32 type, got {}"
-                    .format(args))
+    raise TypeError(f"Arguments to threefry2x32 must have uint32 type, got {args}")
   if all(isinstance(arg, abstract_arrays.ShapedArray) for arg in args):
     shape = lax._broadcasting_shape_rule(*args)
     aval = abstract_arrays.ShapedArray(shape, np.dtype(np.uint32))
@@ -506,10 +505,10 @@ def multivariate_normal(key, mean, cov, shape=None, dtype=onp.float64):
 
 @partial(jit, static_argnums=(3, 4))
 def _multivariate_normal(key, mean, cov, shape, dtype):
-  if not onp.ndim(mean) >= 1:
+  if onp.ndim(mean) < 1:
     msg = "multivariate_normal requires mean.ndim >= 1, got mean.ndim == {}"
     raise ValueError(msg.format(onp.ndim(mean)))
-  if not onp.ndim(cov) >= 2:
+  if onp.ndim(cov) < 2:
     msg = "multivariate_normal requires cov.ndim >= 2, got cov.ndim == {}"
     raise ValueError(msg.format(onp.ndim(cov)))
   n = mean.shape[-1]
@@ -695,7 +694,7 @@ def dirichlet(key, alpha, shape=None, dtype=onp.float64):
 
 @partial(jit, static_argnums=(2, 3))
 def _dirichlet(key, alpha, shape, dtype):
-  if not onp.ndim(alpha) >= 1:
+  if onp.ndim(alpha) < 1:
     msg = "dirichlet requires alpha.ndim >= 1, got alpha.ndim == {}"
     raise ValueError(msg.format(onp.ndim(alpha)))
 

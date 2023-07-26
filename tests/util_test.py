@@ -54,8 +54,11 @@ class UtilTest(jtu.JaxTestCase):
       # Assume results correspond 1:1 to the args + new_args
       assert len(results) == len(args) + len(new_args)
       aux_output = len(new_args)
-      yield (results[0:len(args)],
-             dict(zip(kwargs_keys, results[len(args):]))), aux_output
+      yield (
+          (results[:len(args)], dict(zip(kwargs_keys, results[len(args):]))),
+          aux_output,
+      )
+
 
 
     wf = lu.wrap_init(f)  # Wraps `f` as a `WrappedFun`.

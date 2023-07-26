@@ -105,9 +105,10 @@ def shard_args(backend, devices, assignments, axis_size, tuple_args, args):
   return buffers
 
 
-shard_arg_handlers = {}
-shard_arg_handlers[core.Unit] = \
+shard_arg_handlers = {
+    core.Unit:
     lambda x, devices, _: [xla.device_put(core.unit, d) for d in devices]
+}
 def _shard_array(x, devices, assignments):
   nrep = len(devices)
   return (xla.device_put(x[assignments[r]], devices[r]) for r in range(nrep))
@@ -125,13 +126,13 @@ def shard_aval(size, aval):
   try:
     return shard_aval_handlers[type(aval)](size, aval)
   except KeyError:
-    raise TypeError("No shard_aval handler for type: {}".format(type(aval)))
-shard_aval_handlers = {}
-shard_aval_handlers[core.AbstractUnit] = lambda size, x: x
+    raise TypeError(f"No shard_aval handler for type: {type(aval)}")
+shard_aval_handlers = {core.AbstractUnit: lambda size, x: x}
 def _shard_abstract_array(size, x):
   if x.shape[0] != size:
-    raise ValueError("Axis size {} does not match leading dimension of "
-                     "shape {}".format(size, x.shape))
+    raise ValueError(
+        f"Axis size {size} does not match leading dimension of shape {x.shape}"
+    )
   return ShapedArray(x.shape[1:], x.dtype)
 shard_aval_handlers[ShapedArray] = _shard_abstract_array
 
@@ -139,9 +140,8 @@ def aval_to_result_handler(size, nrep, aval):
   try:
     return pxla_result_handlers[type(aval)](size, nrep, aval)
   except KeyError:
-    raise TypeError("No pxla_result_handler for type: {}".format(type(aval)))
-pxla_result_handlers = {}
-pxla_result_handlers[core.AbstractUnit] = lambda *_: lambda _: core.unit
+    raise TypeError(f"No pxla_result_handler for type: {type(aval)}")
+pxla_result_handlers = {core.AbstractUnit: lambda *_: lambda _: core.unit}
 def array_result_handler(size, nrep, aval):
   full_aval = ShapedArray((size,) + aval.shape, aval.dtype)
   return partial(ShardedDeviceArray, full_aval)
@@ -195,7 +195,7 @@ class DynamicAxisEnv(list):
 
   def __getitem__(self, axis_name):
     if axis_name not in self:
-      raise NameError("unbound axis name: {}".format(axis_name))
+      raise NameError(f"unbound axis name: {axis_name}")
     for frame in reversed(self):
       if frame.name == axis_name:
         return frame
@@ -351,13 +351,12 @@ class ShardedDeviceArray(xla.DeviceArray):
     return self._npy_value
 
   def __getitem__(self, idx):
-    if self._npy_value is None and type(idx) is int:
-      ids = self._ids()
-      device_buffer = self.device_buffers[ids[idx]]
-      aval = ShapedArray(self.aval.shape[1:], self.aval.dtype)
-      return xla.DeviceArray(aval, None, lazy.array(aval.shape), device_buffer)
-    else:
+    if self._npy_value is not None or type(idx) is not int:
       return super(ShardedDeviceArray, self).__getitem__(idx)
+    ids = self._ids()
+    device_buffer = self.device_buffers[ids[idx]]
+    aval = ShapedArray(self.aval.shape[1:], self.aval.dtype)
+    return xla.DeviceArray(aval, None, lazy.array(aval.shape), device_buffer)
 
 # This handler code is effectively dead because we in-lined it in shard_args for
 # performance reasons.
@@ -447,7 +446,7 @@ def parallel_callable(fun, backend, axis_name, axis_size, global_axis_size,
 
   if devices:
     local_devices = [d for d in devices if d.host_id == xb.host_id()]
-    assert len(local_devices) > 0
+    assert local_devices
   else:
     local_devices = None
 
@@ -566,9 +565,9 @@ def _pvals_to_results_handler(size, nrep, out_pvals, devices, backend):
     for r, tuple_buf in enumerate(out_bufs):
       for i, buf in enumerate(tuple_buf.destructure()):
         buffers[i][r] = buf
-    assert not any(buf is result_to_populate for bufs in buffers
-                   for buf in bufs)
+    assert all(buf is not result_to_populate for bufs in buffers for buf in bufs)
     return [h(bufs) for h, bufs in zip(handlers, buffers)]
+
   return handler
 
 def replicate(val, axis_size, nrep, devices=None, backend=None):
@@ -594,8 +593,8 @@ def replicate(val, axis_size, nrep, devices=None, backend=None):
     msg = ("Cannot replicate across %d replicas because only %d local devices "
            "are available." % (nrep, device_count))
     if devices:
-      msg += (" (local devices = %s)"
-              % ", ".join(map(str, devices)) if devices else str(None))
+      msg += (f' (local devices = {", ".join(map(str, devices))})'
+              if devices else str(None))
     raise ValueError(msg)
 
   if devices is None:
@@ -612,24 +611,23 @@ def _pval_to_result_handler(axis_size, nrep, pval, devices, backend):
   if devices:
     assert all(d.host_id == xb.host_id(backend) for d in devices)
   pv, const = pval
-  if pv is None:
-    if nrep is None:
-      nrep = axis_size
-      # If 'const' is a ShardedDeviceArray, it must have come from a pmap nested
-      # inside the one we're currently evaluating, and we should replicate
-      # 'const' across the total number of devices needed. We don't necessarily
-      # know the nested pmap's axis_size (e.g. the jaxpr for
-      # pmap(pmap(lambda x: 3)) is trivial, with no pmaps), but we can use the
-      # axis size of the output 'const'.
-      # TODO: we might be doing unnecessary device transfers in the inner pmap.
-      if isinstance(const, ShardedDeviceArray):
-        nrep *= len(const)
-
-    bcast_const = (core.unit if const is core.unit
-                   else replicate(const, axis_size, nrep, devices, backend))
-    return lambda _: bcast_const
-  else:
+  if pv is not None:
     return aval_to_result_handler(axis_size, nrep, pv)
+  if nrep is None:
+    nrep = axis_size
+    # If 'const' is a ShardedDeviceArray, it must have come from a pmap nested
+    # inside the one we're currently evaluating, and we should replicate
+    # 'const' across the total number of devices needed. We don't necessarily
+    # know the nested pmap's axis_size (e.g. the jaxpr for
+    # pmap(pmap(lambda x: 3)) is trivial, with no pmaps), but we can use the
+    # axis size of the output 'const'.
+    # TODO: we might be doing unnecessary device transfers in the inner pmap.
+    if isinstance(const, ShardedDeviceArray):
+      nrep *= len(const)
+
+  bcast_const = (core.unit if const is core.unit
+                 else replicate(const, axis_size, nrep, devices, backend))
+  return lambda _: bcast_const
 
 def execute_replicated(compiled, backend, in_handler, out_handler, *args):
   input_bufs = in_handler(args)
@@ -725,9 +723,10 @@ def split_axis(axis_name, chunk_size, *args):
     out_tracers = list(map(trace.full_raise, outs))
     out_vals, out_names = unzip2((t.val, t.axis_name) for t in out_tracers)
     del master, out_tracers
-  out_vals = [broadcast(x, chunk_size, 0) if d is not_mapped else x
-              for x, d in zip(out_vals, out_names)]
-  yield out_vals
+  yield [
+      broadcast(x, chunk_size, 0) if d is not_mapped else x
+      for x, d in zip(out_vals, out_names)
+  ]
 
 @lu.transformation_with_aux
 def split_axis_subtrace(master, names, *vals):
@@ -757,15 +756,11 @@ class SplitAxisTracer(core.Tracer):
     aval = raise_to_shaped(core.get_aval(self.val))
     if self.axis_name is not_mapped:
       return aval
-    else:
-      assert isinstance(aval, ShapedArray)
-      return ShapedArray(aval.shape[1:], aval.dtype)
+    assert isinstance(aval, ShapedArray)
+    return ShapedArray(aval.shape[1:], aval.dtype)
 
   def full_lower(self):
-    if self.axis_name is not_mapped:
-      return core.full_lower(self.val)
-    else:
-      return self
+    return core.full_lower(self.val) if self.axis_name is not_mapped else self
 
 class SplitAxisTrace(core.Trace):
   def pure(self, val):
@@ -787,7 +782,7 @@ class SplitAxisTrace(core.Trace):
     elif all(axis_name is not_mapped for axis_name in names_in):
       return primitive.bind(*vals_in, **params)
     else:
-      name, = set(n for n in names_in if n is not not_mapped)
+      name, = {n for n in names_in if n is not not_mapped}
       if primitive in xla.parallel_translations:
         # if it's a pmap collective primitive, do something special
         if name == params['axis_name']:
@@ -824,30 +819,27 @@ class SplitAxisTrace(core.Trace):
     assert call_primitive.multiple_results
     if call_primitive in pe.map_primitives:
       return self.process_map(call_primitive, f, tracers, params)
-    else:
-      vals, names = unzip2((t.val, t.axis_name) for t in tracers)
-      if all(name is not_mapped for name in names):
-        return call_primitive.bind(f, *vals, **params)
-      else:
-        f, names_out = split_axis_subtrace(f, self.master, names)
-        vals_out = call_primitive.bind(f, *vals, **params)
-        return [SplitAxisTracer(self, a, x) for a, x in zip(names_out(), vals_out)]
+    vals, names = unzip2((t.val, t.axis_name) for t in tracers)
+    if all(name is not_mapped for name in names):
+      return call_primitive.bind(f, *vals, **params)
+    f, names_out = split_axis_subtrace(f, self.master, names)
+    vals_out = call_primitive.bind(f, *vals, **params)
+    return [SplitAxisTracer(self, a, x) for a, x in zip(names_out(), vals_out)]
 
   def process_map(self, map_primitive, f, tracers, params):
     vals, names = unzip2((t.val, t.axis_name) for t in tracers)
     if all(name is not_mapped for name in names):
       return map_primitive.bind(f, *vals, **params)
-    else:
-      # because the map primitive maps over leading axes, we need to transpose
-      # the software-mapped axis on any mapped arguments to be the second axis;
-      # then we call the map primitive and resume the trace under the call
-      vals_trans = [batching.moveaxis(x, 0, 1) if d is not not_mapped else x
-                    for x, d in zip(vals, names)]
-      f, names_out = split_axis_subtrace(f, self.master, names)
-      vals_out_trans = map_primitive.bind(f, *vals_trans, **params)
-      vals_out = [batching.moveaxis(x, 1, 0) if d is not not_mapped else x
-                  for x, d in zip(vals_out_trans, names_out())]
-      return [SplitAxisTracer(self, a, x) for a, x in zip(names_out(), vals_out)]
+    # because the map primitive maps over leading axes, we need to transpose
+    # the software-mapped axis on any mapped arguments to be the second axis;
+    # then we call the map primitive and resume the trace under the call
+    vals_trans = [batching.moveaxis(x, 0, 1) if d is not not_mapped else x
+                  for x, d in zip(vals, names)]
+    f, names_out = split_axis_subtrace(f, self.master, names)
+    vals_out_trans = map_primitive.bind(f, *vals_trans, **params)
+    vals_out = [batching.moveaxis(x, 1, 0) if d is not not_mapped else x
+                for x, d in zip(vals_out_trans, names_out())]
+    return [SplitAxisTracer(self, a, x) for a, x in zip(names_out(), vals_out)]
 
   def post_process_call(self, call_primitive, out_tracer, params):
     val, name = out_tracer.val, out_tracer.axis_name

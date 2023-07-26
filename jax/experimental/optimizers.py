@@ -463,11 +463,12 @@ def piecewise_constant(boundaries, values):
   values = np.array(values)
   if not boundaries.ndim == values.ndim == 1:
     raise ValueError("boundaries and values must be sequences")
-  if not boundaries.shape[0] == values.shape[0] - 1:
+  if boundaries.shape[0] != values.shape[0] - 1:
     raise ValueError("boundaries length must be one longer than values length")
 
   def schedule(i):
     return values[np.sum(i > boundaries)]
+
   return schedule
 
 def make_schedule(scalar_or_schedule):

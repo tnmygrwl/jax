@@ -393,7 +393,8 @@ def cond(pred, true_operand, true_fun, false_operand, false_fun):
   """
 
   if len(onp.shape(pred)) != 0:
-    raise TypeError("Pred must be a scalar, got {} of shape {}.".format(pred, onp.shape(pred)))
+    raise TypeError(
+        f"Pred must be a scalar, got {pred} of shape {onp.shape(pred)}.")
 
   try:
     pred_dtype = dtypes.result_type(pred)
@@ -432,12 +433,18 @@ def _cond_translation_rule(c, axis_env, name_stack, pred, *args,
   true_ops, false_ops = split_list(args, [len(true_jaxpr.in_avals)])
 
   def make_computation(name, jaxpr, op_shape):
-    c = xb.make_computation_builder(name + '_comp')
+    c = xb.make_computation_builder(f'{name}_comp')
     op = c.ParameterWithShape(op_shape)
     ops = [c.GetTupleElement(op, i) for i in range(len(jaxpr.in_avals))]
-    outs = xla.jaxpr_subcomp(c, jaxpr.jaxpr, backend, axis_env,
-                             _map(c.Constant, jaxpr.literals),
-                             extend_name_stack(name_stack, name + '_fun'), *ops)
+    outs = xla.jaxpr_subcomp(
+        c,
+        jaxpr.jaxpr,
+        backend,
+        axis_env,
+        _map(c.Constant, jaxpr.literals),
+        extend_name_stack(name_stack, f'{name}_fun'),
+        *ops,
+    )
     return c.Build(c.Tuple(*outs))
 
   true_op = c.Tuple(*true_ops)
@@ -451,9 +458,8 @@ def _cond_translation_rule(c, axis_env, name_stack, pred, *args,
 def _cond_pred_bcast_select(pred, x, y):
   if core.get_aval(x) is core.get_aval(y) is core.abstract_unit:
     return x
-  else:
-    bcast_pred = lax.broadcast_in_dim(pred, onp.shape(x), list(range(onp.ndim(pred))))
-    return lax.select(bcast_pred, x, y)
+  bcast_pred = lax.broadcast_in_dim(pred, onp.shape(x), list(range(onp.ndim(pred))))
+  return lax.select(bcast_pred, x, y)
 
 def _cond_batching_rule(args, dims, true_jaxpr, false_jaxpr, linear):
   # TODO: maybe avoid moving arg axes to front if we're promoting to select?
@@ -606,10 +612,7 @@ def _join_cond_outputs(jaxpr, num_prefix, zeros_avals, zeros_on_left):
     prefix_and_rest = core.jaxpr_as_fun(jaxpr)(*args)
     prefix, rest = split_list(prefix_and_rest, [num_prefix])
     zeros = [ad_util.zeros_like_aval(a) for a in zeros_avals]
-    if zeros_on_left:
-      return prefix + zeros + rest
-    else:
-      return prefix + rest + zeros
+    return prefix + zeros + rest if zeros_on_left else prefix + rest + zeros
 
   return _make_typed_jaxpr(f_aug, jaxpr.in_avals)
 
@@ -772,7 +775,7 @@ def scan(f, init, xs, length=None):
 
   if length is not None:
     length = int(length)
-    if not all(length == l for l in lengths):
+    if any(length != l for l in lengths):
       msg = ("scan got `length` argument of {} which disagrees with "
              "leading axis sizes {}.")
       raise ValueError(msg.format(length, [x.shape[0] for x in xs_flat]))
@@ -781,7 +784,7 @@ def scan(f, init, xs, length=None):
     if len(unique_lengths) > 1:
       msg = "scan got values with different leading axis sizes: {}."
       raise ValueError(msg.format(', '.join(str(x.shape[0]) for x in xs_flat)))
-    elif len(unique_lengths) == 0:
+    elif not unique_lengths:
       msg = "scan got no values to scan over and `length` not provided."
       raise ValueError(msg)
     else:
@@ -1014,8 +1017,8 @@ def _scan_transpose(cts, *args, forward, length, num_consts, num_carry, jaxpr, l
   consts, _, xs = split_list(args, [num_consts, num_carry])
   ires, _ = split_list(consts, [num_ires])
   _, eres = split_list(xs, [sum(xs_lin)])
-  assert not any(r is ad.undefined_primal for r in ires)
-  assert not any(r is ad.undefined_primal for r in eres)
+  assert all(r is not ad.undefined_primal for r in ires)
+  assert all(r is not ad.undefined_primal for r in eres)
 
   carry_avals, y_avals = split_list(jaxpr.out_avals, [num_carry])
   ys_avals = _map(partial(_promote_aval_rank, length), y_avals)
@@ -1233,8 +1236,8 @@ masking.masking_rules[lax.concatenate_p] = _concat_masking_rule
 def _check_tree(func_name, expected_name, actual_tree, expected_tree):
   if actual_tree != expected_tree:
     raise TypeError(
-        "{}() output pytree structure must match {}, got {} and {}."
-        .format(func_name, expected_name, actual_tree, expected_tree))
+        f"{func_name}() output pytree structure must match {expected_name}, got {actual_tree} and {expected_tree}."
+    )
 
 
 def _check_tree_and_avals(what, tree1, avals1, tree2, avals2):
@@ -1347,8 +1350,7 @@ def _root_abstract_eval(*args, **kwargs):
 def _root_impl(*args, **kwargs):
   const_lengths, jaxprs = split_dict(kwargs, ['const_lengths', 'jaxprs'])
   params, initial_guess = _split_root_args(args, const_lengths)
-  solution = core.jaxpr_as_fun(jaxprs.solve)(*(params.solve + initial_guess))
-  return solution
+  return core.jaxpr_as_fun(jaxprs.solve)(*(params.solve + initial_guess))
 
 
 def _root_jvp(primals, tangents, const_lengths, jaxprs):
@@ -1425,10 +1427,9 @@ def _check_shapes(func_name, expected_name, actual, expected, tree):
   if actual_shapes != expected_shapes:
     actual_shape_tree = tree_unflatten(tree, actual_shapes)
     act_shape_tree = tree_unflatten(tree, actual_shapes)
-    raise ValueError('{}() output shapes must match {}, got {} and {}'
-                     .format(func_name, expected_name,
-                             tree_unflatten(tree, actual_shapes),
-                             tree_unflatten(tree, expected_shapes)))
+    raise ValueError(
+        f'{func_name}() output shapes must match {expected_name}, got {tree_unflatten(tree, actual_shapes)} and {tree_unflatten(tree, expected_shapes)}'
+    )
 
 
 def custom_linear_solve(
@@ -1620,9 +1621,8 @@ def _linear_solve_batching_rule(args, dims, **kwargs):
                       orig_b_bat)
     if x_bat_out == x_bat and b_bat_out == b_bat:
       break
-    else:
-      x_bat = x_bat_out
-      b_bat = b_bat_out
+    x_bat = x_bat_out
+    b_bat = b_bat_out
   else:
     assert False, "Fixedpoint not reached"
 

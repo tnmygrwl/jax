@@ -59,10 +59,7 @@ scalar_types = [np.bool_, np.int8, np.int16, np.int32, np.int64,
 
 class DtypesTest(jtu.JaxTestCase):
 
-  @parameterized.named_parameters(
-    {"testcase_name": "_type={}".format(type.__name__), "type": type,
-     "dtype": dtype}
-    for type, dtype in [(bool, np.bool_), (int, np.int_), (float, np.float_),
+  @parameterized.named_parameters({"testcase_name": f"_type={type.__name__}", "type": type, "dtype": dtype} for type, dtype in [(bool, np.bool_), (int, np.int_), (float, np.float_),
                         (complex, np.complex_)])
   def testDefaultTypes(self, type, dtype):
     for f in [np.array, jax.jit(np.array), jax.jit(lambda x: x)]:
@@ -70,10 +67,7 @@ class DtypesTest(jtu.JaxTestCase):
       self.assertTrue(isinstance(y, np.ndarray), msg=(f, y))
       self.assertEqual(y.dtype, dtypes.canonicalize_dtype(dtype), msg=(f, y))
 
-  @parameterized.named_parameters(
-    {"testcase_name": "_swap={}_jit={}".format(swap, jit),
-     "swap": swap, "jit": jit} 
-    for swap in [False, True] for jit in [False, True])
+  @parameterized.named_parameters({"testcase_name": f"_swap={swap}_jit={jit}", "swap": swap, "jit": jit} for swap in [False, True] for jit in [False, True])
   @jtu.skip_on_devices("tpu")  # F16 not supported on TPU
   def testBinaryPromotion(self, swap, jit):
     testcases = [

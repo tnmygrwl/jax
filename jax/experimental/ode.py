@@ -476,8 +476,7 @@ def pend(y, t, arg1, arg2):
   """Simple pendulum system for odeint testing."""
   del t
   theta, omega = y
-  dydt = np.array([omega, -arg1*omega - arg2*np.sin(theta)])
-  return dydt
+  return np.array([omega, -arg1*omega - arg2*np.sin(theta)])
 
 
 @jax.jit
@@ -497,17 +496,16 @@ def benchmark_odeint(fun, y0, tspace, *args):
     start = time.time()
     scipy_result = osp_integrate.odeint(fun, y0, tspace, args)
     end = time.time()
-    print('scipy odeint elapsed time ({} of {}): {}'.format(
-        k+1, n_trials, end-start))
+    print(f'scipy odeint elapsed time ({k + 1} of {n_trials}): {end - start}')
   for k in range(n_trials):
     start = time.time()
     jax_result = odeint(fun, np.array(y0), np.array(tspace), *args)
     jax_result.block_until_ready()
     end = time.time()
-    print('JAX odeint elapsed time ({} of {}): {}'.format(
-        k+1, n_trials, end-start))
-  print('norm(scipy result-jax result): {}'.format(
-      np.linalg.norm(np.asarray(scipy_result) - jax_result)))
+    print(f'JAX odeint elapsed time ({k + 1} of {n_trials}): {end - start}')
+  print(
+      f'norm(scipy result-jax result): {np.linalg.norm(np.asarray(scipy_result) - jax_result)}'
+  )
 
   return scipy_result, jax_result
 
@@ -597,8 +595,7 @@ def test_defvjp_all():
     rslt = jacswoop(*wrap_args)
     rslt.block_until_ready()
     end = time.time()
-    print('JAX jacrev elapsed time ({} of {}): {}'.format(
-        k+1, n_trials, end-start))
+    print(f'JAX jacrev elapsed time ({k + 1} of {n_trials}): {end - start}')
 
 
 if __name__ == '__main__':

@@ -152,7 +152,7 @@ def tree_transpose(outer_treedef, inner_treedef, pytree_to_transpose):
   flat, treedef = tree_flatten(pytree_to_transpose)
   expected_treedef = outer_treedef.compose(inner_treedef)
   if treedef != expected_treedef:
-    raise TypeError("Mismatch\n{}\n != \n{}".format(treedef, expected_treedef))
+    raise TypeError(f"Mismatch\n{treedef}\n != \n{expected_treedef}")
 
   inner_size = inner_treedef.num_leaves
   outer_size = outer_treedef.num_leaves
@@ -177,19 +177,17 @@ def _replace_nones(sentinel, tree):
   """Replaces `None` in `tree` with `sentinel`."""
   if tree is None:
     return sentinel
+  if handler := _registry.get(type(tree)):
+    children, metadata = handler.to_iter(tree)
+    proc_children = [_replace_nones(sentinel, child) for child in children]
+    return handler.from_iter(metadata, proc_children)
+  elif isinstance(tree, tuple) and hasattr(tree, '_fields'):
+    # handle namedtuple as a special case, based on heuristic
+    children = iter(tree)
+    proc_children = [_replace_nones(sentinel, child) for child in children]
+    return type(tree)(*proc_children)
   else:
-    handler = _registry.get(type(tree))
-    if handler:
-      children, metadata = handler.to_iter(tree)
-      proc_children = [_replace_nones(sentinel, child) for child in children]
-      return handler.from_iter(metadata, proc_children)
-    elif isinstance(tree, tuple) and hasattr(tree, '_fields'):
-      # handle namedtuple as a special case, based on heuristic
-      children = iter(tree)
-      proc_children = [_replace_nones(sentinel, child) for child in children]
-      return type(tree)(*proc_children)
-    else:
-      return tree
+    return tree
 
 def tree_reduce(f, tree):
   return functools.reduce(f, tree_leaves(tree))

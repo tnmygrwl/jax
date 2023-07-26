@@ -153,10 +153,7 @@ class Literal(object):
     assert False
 
   def __repr__(self):
-    if self.hash is None:
-      return 'Literal(val={})'.format(self.val)
-    else:
-      return '{}'.format(self.val)
+    return f'Literal(val={self.val})' if self.hash is None else f'{self.val}'
 
 literalable_types = set()
 
@@ -169,7 +166,7 @@ class Primitive(object):
     self.name = name
 
   def __repr__(self):
-    return '{}'.format(self.name)
+    return f'{self.name}'
 
   def bind(self, *args, **kwargs):
     assert skip_checks or all(isinstance(arg, Tracer)
@@ -198,12 +195,11 @@ class Primitive(object):
     return bind
 
   def impl(self, *args, **kwargs):
-    raise NotImplementedError("Evaluation rule for '{}' not implemented"
-                              .format(self.name))
+    raise NotImplementedError(f"Evaluation rule for '{self.name}' not implemented")
 
   def abstract_eval(self, *args, **kwargs):
-    raise NotImplementedError("Abstract evaluation for '{}' not implemented"
-                              .format(self.name))
+    raise NotImplementedError(
+        f"Abstract evaluation for '{self.name}' not implemented")
 
 
 # -------------------- lifting --------------------
@@ -218,19 +214,15 @@ def extract_call_jaxpr(primitive, params):
   """
   if not primitive.call_primitive:
     return (None, params)
-  else:
-    assert "call_jaxpr" in params
-    new_params = dict(params)
-    del new_params["call_jaxpr"]
-    return (params["call_jaxpr"], new_params)
+  assert "call_jaxpr" in params
+  new_params = dict(params)
+  del new_params["call_jaxpr"]
+  return (params["call_jaxpr"], new_params)
 
 
 def eval_jaxpr(jaxpr, consts, *args):
   def read(v):
-    if type(v) is Literal:
-      return v.val
-    else:
-      return env[v]
+    return v.val if type(v) is Literal else env[v]
 
   def write(v, val):
     env[v] = val
@@ -255,10 +247,7 @@ def eval_jaxpr(jaxpr, consts, *args):
 
 
 def full_lower(val):
-  if isinstance(val, Tracer):
-    return val.full_lower()
-  else:
-    return val
+  return val.full_lower() if isinstance(val, Tracer) else val
 
 
 def find_top_trace(xs):
@@ -299,17 +288,16 @@ class Trace(object):
         return self.sublift(val)
       else:
         self.escaped_tracer_error(
-          "Can't lift sublevels {} to {}".format(val._trace.sublevel, sublevel))
+            f"Can't lift sublevels {val._trace.sublevel} to {sublevel}")
     elif val._trace.level < level:
       if val._trace.sublevel > sublevel:
         self.escaped_tracer_error(
-          "Incompatible sublevel: {}, {}".format(val._trace, (level, sublevel)))
+            f"Incompatible sublevel: {val._trace}, {(level, sublevel)}")
       return self.lift(val)
     elif val._trace.level > level:
-      self.escaped_tracer_error(
-        "Can't lift level {} to {}".format(val, self))
-    else:  # val._trace.level == self.level:
-      self.escaped_tracer_error("Different traces at same level: {}, {}".format(val, self))
+      self.escaped_tracer_error(f"Can't lift level {val} to {self}")
+    else:# val._trace.level == self.level:
+      self.escaped_tracer_error(f"Different traces at same level: {val}, {self}")
 
 
   def pure(self, val):
@@ -325,8 +313,7 @@ class Trace(object):
     assert False, "Must override"
 
   def __repr__(self):
-    return '{}(level={}/{})'.format(
-        self.__class__.__name__, self.level, self.sublevel)
+    return f'{self.__class__.__name__}(level={self.level}/{self.sublevel})'
 
 
 class Tracer(object):
@@ -408,8 +395,7 @@ class Tracer(object):
     try:
       attr = getattr(self.aval, name)
     except KeyError:
-      raise AttributeError(
-          "{} has no attribute {}".format(self.__class__.__name__, name))
+      raise AttributeError(f"{self.__class__.__name__} has no attribute {name}")
     else:
       t = type(attr)
       if t is aval_property:
@@ -420,7 +406,7 @@ class Tracer(object):
         return attr
 
   def __repr__(self):
-    return 'Traced<{}>with<{}>'.format(self.aval, self._trace)
+    return f'Traced<{self.aval}>with<{self._trace}>'
 
   def __copy__(self):
     return self
@@ -441,7 +427,7 @@ class MasterTrace(object):
     self.trace_type = trace_type
 
   def __repr__(self):
-    return "MasterTrace({},{})".format(self.level, self.trace_type.__name__)
+    return f"MasterTrace({self.level},{self.trace_type.__name__})"
 
   def __hash__(self):
     return hash((self.level, self.trace_type))
@@ -456,10 +442,7 @@ class TraceStack(object):
     self.downward = []
 
   def next_level(self, bottom):
-    if bottom:
-      return - (len(self.downward) + 1)
-    else:
-      return len(self.upward)
+    return - (len(self.downward) + 1) if bottom else len(self.upward)
 
   def push(self, val, bottom):
     if bottom:
@@ -512,7 +495,7 @@ def new_master(trace_type, bottom=False):
     del master
     if t() is not None:
       print(trace_state.trace_stack)
-      raise Exception('Leaked trace {}'.format(t()))
+      raise Exception(f'Leaked trace {t()}')
 
 
 @contextmanager
@@ -528,7 +511,7 @@ def new_sublevel():
     t = ref(sublevel)
     del sublevel
     if t() is not None:
-      raise Exception('Leaked sublevel {}'.format(t()))
+      raise Exception(f'Leaked sublevel {t()}')
 
 # -------------------- abstract values --------------------
 
@@ -541,8 +524,8 @@ class AbstractValue(object):
 
   def __repr__(self):
     try:
-      kv_pairs = ('{}={}'.format(k, v) for k, v in self.__dict__.items())
-      return '{}({})'.format(self.__class__.__name__, ','.join(kv_pairs))
+      kv_pairs = (f'{k}={v}' for k, v in self.__dict__.items())
+      return f"{self.__class__.__name__}({','.join(kv_pairs)})"
     except AttributeError:
       return self.__class__.__name__
 
@@ -585,14 +568,11 @@ def concrete_aval(x):
   try:
     return pytype_aval_mappings[type(x)](x)
   except KeyError:
-    raise TypeError("{} is not a valid Jax type".format(type(x)))
+    raise TypeError(f"{type(x)} is not a valid Jax type")
 
 
 def get_aval(x):
-  if isinstance(x, Tracer):
-    return x.aval
-  else:
-    return concrete_aval(x)
+  return x.aval if isinstance(x, Tracer) else concrete_aval(x)
 
 
 pytype_aval_mappings = {}
@@ -628,8 +608,9 @@ def process_env_traces(primitive, level, params_tuple, *args):
   params = dict(params_tuple)
   todo = []
   while True:
-    tracers = [x for x in outs if isinstance(x, Tracer) and x._trace.level > level]
-    if tracers:
+    if tracers := [
+        x for x in outs if isinstance(x, Tracer) and x._trace.level > level
+    ]:
       ans = max(tracers, key=lambda x: x._trace.level)
     else:
       break
@@ -717,9 +698,9 @@ def pp_eqn_compact(primitive_name, params):
 def pp_eqn(eqn):
   lhs = pp_vars(eqn.outvars)
   pp_subexpr = pp('')
-  return (pp('{} = '.format(lhs)) >>
-          pp(eqn.primitive.name) >> pp_kv_pairs(sorted(eqn.params.items()))
-          >> pp(' ') >> pp(pp_vars(eqn.invars))) + pp_subexpr
+  return ((pp(f'{lhs} = ') >> pp(eqn.primitive.name)) >> pp_kv_pairs(
+      sorted(eqn.params.items())) >> pp(' ') >> pp(pp_vars(
+          eqn.invars))) + pp_subexpr
 
 def pp_jaxpr(jaxpr):
   if len(jaxpr.outvars) > 1:
@@ -727,8 +708,6 @@ def pp_jaxpr(jaxpr):
   else:
     pp_outvars = str(jaxpr.outvars[0])
 
-  return (pp('{{ lambda {} ; {}.'.format(pp_vars(jaxpr.constvars),
-                                         pp_vars(jaxpr.invars))) +
-          ((pp('let ') >>
-            vcat(map(pp_eqn, jaxpr.eqns))) +
-           pp('in {} }}'.format(pp_outvars))).indent(2))
+  return pp(f'{{ lambda {pp_vars(jaxpr.constvars)} ; {pp_vars(jaxpr.invars)}.'
+            ) + ((pp('let ') >> vcat(map(pp_eqn, jaxpr.eqns))) +
+                 pp(f'in {pp_outvars} }}')).indent(2)

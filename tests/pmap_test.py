@@ -71,12 +71,11 @@ class PmapTest(jtu.JaxTestCase):
       except ValueError:
         msg = "device mesh shape {} not compatible with device count {}"
         raise SkipTest(msg.format(device_mesh_shape, device_count))
+    elif device_count % prod(device_mesh_shape):
+      msg = "device mesh size {} does not divide available device count {}"
+      raise SkipTest(msg.format(prod(device_mesh_shape), device_count))
     else:
-      if device_count % prod(device_mesh_shape):
-        msg = "device mesh size {} does not divide available device count {}"
-        raise SkipTest(msg.format(prod(device_mesh_shape), device_count))
-      else:
-        return device_mesh_shape
+      return device_mesh_shape
 
   def testBasic(self):
     f = pmap(lambda x: x - lax.psum(x, 'i'), axis_name='i')
@@ -159,10 +158,7 @@ class PmapTest(jtu.JaxTestCase):
         "Axis size .* does not match leading dimension of shape .*",
         lambda: f(onp.random.randn(n), onp.random.randn(n - 1)))
 
-  @parameterized.named_parameters(
-      {"testcase_name": "_mesh={}".format(device_mesh_shape),
-       "device_mesh_shape": device_mesh_shape}
-      for device_mesh_shape in [(1, 1), (2, -1), (-1, 2)])
+  @parameterized.named_parameters({"testcase_name": f"_mesh={device_mesh_shape}", "device_mesh_shape": device_mesh_shape} for device_mesh_shape in [(1, 1), (2, -1), (-1, 2)])
   def testNestedShardingAndStacking(self, device_mesh_shape):
     mesh_shape = self._getMeshShape(device_mesh_shape)
 
@@ -605,25 +601,6 @@ class PmapTest(jtu.JaxTestCase):
   def testNestedPmapConstantDevices(self):
     raise SkipTest("Nested pmaps with devices not yet implemented")
 
-    if xla_bridge.device_count() < 6:
-      raise SkipTest("this test requires >= 6 devices")
-
-    devices = xla_bridge.devices()[:-2]
-    shuffle(devices)
-    f = pmap(pmap(lambda x: 3), devices=devices)
-    shape = (2, len(devices) // 2, 3)
-    x = np.arange(prod(shape)).reshape(shape)
-    with jtu.count_jit_and_pmap_compiles() as count:
-      ans = f(x)
-    self.assertEqual(count[0], 0)
-    expected = 3 * onp.ones(shape[:2])
-    self.assertAllClose(ans, expected, check_dtypes=False)
-
-    # Test that 'ans' was properly replicated across devices.
-    expected_sharded = pmap(pmap(lambda x: x), devices=devices)(expected)
-    self.assertEqual([b.device() for b in ans.device_buffers],
-                     [b.device() for b in expected_sharded.device_buffers])
-
   def testNestedPmapConstantError(self):
     f = pmap(pmap(lambda x: 3))
     shape = (2, xla_bridge.device_count() // 2 + 1, 3)
@@ -912,26 +889,6 @@ class PmapTest(jtu.JaxTestCase):
     # because we assume eager ops (like scan here) can't require more than 1
     # replica.
     raise SkipTest("need eager multi-replica support")
-    # test came from https://github.com/google/jax/issues/1369
-    nrep = xla_bridge.device_count()
-
-    def pmvm(a, b):
-      a = a.reshape((nrep, -1, a.shape[1]))
-      func = pmap(lambda z: np.dot(z, b))
-      return func(a).reshape(b.shape)
-
-    n = nrep * 2
-    rng = onp.random.RandomState(0)
-    a = rng.randn(n, n)
-    b = rng.randn(n)
-
-    iters = np.arange(5)
-    def body(carry, i):
-      return pmvm(a, carry), i
-    ans, _ = lax.scan(body, b, iters)
-
-    expected = onp.linalg.matrix_power(a, 5).dot(b)
-    self.assertAllClose(ans, expected, check_dtypes=False)
 
   def testManyArgs(self):
     @pmap

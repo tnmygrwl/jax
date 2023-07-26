@@ -58,14 +58,13 @@ def cond(x, p=None):
 @_wraps(onp.linalg.tensorinv)
 def tensorinv(a, ind=2):
   a = np.asarray(a)
-  oldshape = a.shape
   prod = 1
-  if ind > 0:
-    invshape = oldshape[ind:] + oldshape[:ind]
-    for k in oldshape[ind:]:
-      prod *= k
-  else:
+  if ind <= 0:
     raise ValueError("Invalid ind argument.")
+  oldshape = a.shape
+  invshape = oldshape[ind:] + oldshape[:ind]
+  for k in oldshape[ind:]:
+    prod *= k
   a = a.reshape(prod, -1)
   ia = la.inv(a)
   return ia.reshape(*invshape)

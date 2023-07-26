@@ -40,16 +40,12 @@ _Shape = xla_client.Shape
 
 def _real_type(dtype):
   """Returns the real equivalent of 'dtype'."""
-  if dtype == np.float32:
+  if dtype == np.float32 or dtype != np.float64 and dtype == np.complex64:
     return np.float32
-  elif dtype == np.float64:
-    return np.float64
-  elif dtype == np.complex64:
-    return np.float32
-  elif dtype == np.complex128:
+  elif dtype in [np.float64, np.complex128]:
     return np.float64
   else:
-    raise NotImplementedError("Unsupported dtype {}".format(dtype))
+    raise NotImplementedError(f"Unsupported dtype {dtype}")
 
 _prod = lambda xs: functools.reduce(operator.mul, xs, 1)
 
@@ -72,8 +68,7 @@ def trsm(c, a, b, left_side=False, lower=False, trans_a=False, conj_a=False,
   a_shape = c.GetShape(a)
   if (batch_dims + (k, k) != a_shape.dimensions() or
       a_shape.element_type() != dtype):
-    raise ValueError("Argument mismatch for trsm, got {} and {}".format(
-      a_shape, b_shape))
+    raise ValueError(f"Argument mismatch for trsm, got {a_shape} and {b_shape}")
 
   if conj_a and not trans_a:
     raise NotImplementedError("Conjugation without transposition not supported")
@@ -310,11 +305,11 @@ def gesvd(c, a, full_matrices=True, compute_uv=True):
   b = _prod(batch_dims)
   singular_vals_dtype = np.dtype(_real_type(dtype))
 
+  scalar_layout = tuple(range(num_bd - 1, -1, -1))
+  vector_layout = (num_bd,) + scalar_layout
   if m < 32 and n < 32:
     lwork, opaque = cusolver_kernels.build_gesvdj_descriptor(
         np.dtype(dtype), b, m, n, compute_uv)
-    scalar_layout = tuple(range(num_bd - 1, -1, -1))
-    vector_layout = (num_bd,) + scalar_layout
     matrix_layout = (num_bd, num_bd + 1) + scalar_layout
     out = c.CustomCall(
         b"cusolver_gesvdj",
@@ -342,8 +337,6 @@ def gesvd(c, a, full_matrices=True, compute_uv=True):
   elif m < n:
     lwork, opaque = cusolver_kernels.build_gesvd_descriptor(
         np.dtype(dtype), b, n, m, compute_uv, full_matrices)
-    scalar_layout = tuple(range(num_bd - 1, -1, -1))
-    vector_layout = (num_bd,) + scalar_layout
     matrix_layout = (num_bd + 1, num_bd) + scalar_layout
     out = c.CustomCall(
         b"cusolver_gesvd",
@@ -369,8 +362,6 @@ def gesvd(c, a, full_matrices=True, compute_uv=True):
     lwork, opaque = cusolver_kernels.build_gesvd_descriptor(
         np.dtype(dtype), b, m, n, compute_uv, full_matrices)
 
-    scalar_layout = tuple(range(num_bd - 1, -1, -1))
-    vector_layout = (num_bd,) + scalar_layout
     matrix_layout = (num_bd, num_bd + 1) + scalar_layout
     out = c.CustomCall(
         b"cusolver_gesvd",

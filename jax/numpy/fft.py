@@ -26,25 +26,21 @@ from .. import ops as jaxops
 
 def _fft_core(func_name, fft_type, a, s, axes, norm):
   # TODO(skye): implement padding/cropping based on 's'.
-  full_name = "jax.np.fft." + func_name
+  full_name = f"jax.np.fft.{func_name}"
   if s is not None:
-    raise NotImplementedError("%s only supports s=None, got %s" % (full_name, s))
+    raise NotImplementedError(f"{full_name} only supports s=None, got {s}")
   if norm is not None:
-    raise NotImplementedError("%s only supports norm=None, got %s" % (full_name, norm))
+    raise NotImplementedError(f"{full_name} only supports norm=None, got {norm}")
   if s is not None and axes is not None and len(s) != len(axes):
     # Same error as numpy.
     raise ValueError("Shape and axes have different lengths.")
 
   orig_axes = axes
   if axes is None:
-    if s is None:
-      axes = range(a.ndim)
-    else:
-      axes = range(a.ndim - len(s), a.ndim)
-
+    axes = range(a.ndim) if s is None else range(a.ndim - len(s), a.ndim)
   if len(axes) != len(set(axes)):
     raise ValueError(
-        "%s does not support repeated axes. Got axes %s." % (full_name, axes))
+        f"{full_name} does not support repeated axes. Got axes {axes}.")
 
   if len(axes) > 3:
     # XLA does not support FFTs over more than 3 dimensions
@@ -93,7 +89,7 @@ def irfftn(a, s=None, axes=None, norm=None):
 
 
 def _fft_core_1d(func_name, fft_type, a, s, axis, norm):
-  full_name = "jax.np.fft." + func_name
+  full_name = f"jax.np.fft.{func_name}"
   if isinstance(axis, (list, tuple)):
     raise ValueError(
         "%s does not support multiple axes. Please use %sn. "
@@ -125,7 +121,7 @@ def irfft(a, n=None, axis=-1, norm=None):
 
 
 def _fft_core_2d(func_name, fft_type, a, s, axes, norm):
-  full_name = "jax.np.fft." + func_name
+  full_name = f"jax.np.fft.{func_name}"
   if len(axes) != 2:
     raise ValueError(
         "%s only supports 2 axes. Got axes = %r."
@@ -157,12 +153,12 @@ def irfft2(a, s=None, axes=(-2,-1), norm=None):
 
 @_wraps(onp.fft.fftfreq)
 def fftfreq(n, d=1.0):
-  if isinstance(n, list) or isinstance(n, tuple):
+  if isinstance(n, (list, tuple)):
     raise ValueError(
           "The n argument of jax.np.fft.fftfreq only takes an int. "
           "Got n = %s." % list(n))
 
-  elif isinstance(d, list) or isinstance(d, tuple):
+  elif isinstance(d, (list, tuple)):
     raise ValueError(
           "The d argument of jax.np.fft.fftfreq only takes a single value. "
           "Got d = %s." % list(d))
@@ -170,14 +166,14 @@ def fftfreq(n, d=1.0):
   k = np.zeros(n)
   if n % 2 == 0:
     # k[0: n // 2 - 1] = np.arange(0, n // 2 - 1)
-    k = jaxops.index_update(k, jaxops.index[0: n // 2], np.arange(0, n // 2))
+    k = jaxops.index_update(k, jaxops.index[:n // 2], np.arange(0, n // 2))
 
     # k[n // 2:] = np.arange(-n // 2, -1)
     k = jaxops.index_update(k, jaxops.index[n // 2:], np.arange(-n // 2, 0))
 
   else:
     # k[0: (n - 1) // 2] = np.arange(0, (n - 1) // 2)
-    k = jaxops.index_update(k, jaxops.index[0: (n - 1) // 2 + 1],
+    k = jaxops.index_update(k, jaxops.index[:(n - 1) // 2 + 1],
                             np.arange(0, (n - 1) // 2 + 1))
 
     # k[(n - 1) // 2 + 1:] = np.arange(-(n - 1) // 2, -1)
@@ -189,22 +185,17 @@ def fftfreq(n, d=1.0):
 
 @_wraps(onp.fft.rfftfreq)
 def rfftfreq(n, d=1.0):
-  if isinstance(n, list) or isinstance(n, tuple):
+  if isinstance(n, (list, tuple)):
     raise ValueError(
           "The n argument of jax.np.fft.rfftfreq only takes an int. "
           "Got n = %s." % list(n))
 
-  elif isinstance(d, list) or isinstance(d, tuple):
+  elif isinstance(d, (list, tuple)):
     raise ValueError(
           "The d argument of jax.np.fft.rfftfreq only takes a single value. "
           "Got d = %s." % list(d))
 
-  if n % 2 == 0:
-    k = np.arange(0, n // 2 + 1)
-
-  else:
-    k = np.arange(0, (n - 1) // 2 + 1)
-
+  k = np.arange(0, n // 2 + 1) if n % 2 == 0 else np.arange(0, (n - 1) // 2 + 1)
   return k / (d * n)
 
 

@@ -93,6 +93,7 @@ See the difference?
 
 """
 
+
 from jax import grad, jit, vmap
 import jax.numpy as jnp
 import numpy as np
@@ -110,7 +111,7 @@ warnings.warn(
 # See http://docs.scipy.org/doc/numpy/reference/c-api.generalized-ufuncs.html
 _DIMENSION_NAME = r'\w+'
 _CORE_DIMENSION_LIST = '(?:{0:}(?:,{0:})*)?'.format(_DIMENSION_NAME)
-_ARGUMENT = r'\({}\)'.format(_CORE_DIMENSION_LIST)
+_ARGUMENT = f'\({_CORE_DIMENSION_LIST}\)'
 _ARGUMENT_LIST = '{0:}(?:,{0:})*'.format(_ARGUMENT)
 _SIGNATURE = '^{0:}->{0:}$'.format(_ARGUMENT_LIST)
 
@@ -128,8 +129,7 @@ def _parse_gufunc_signature(signature):
       of the form List[Tuple[str, ...]].
     """
     if not re.match(_SIGNATURE, signature):
-        raise ValueError(
-            'not a valid gufunc signature: {}'.format(signature))
+        raise ValueError(f'not a valid gufunc signature: {signature}')
     return tuple([tuple(re.findall(_DIMENSION_NAME, arg))
                   for arg in re.findall(_ARGUMENT, arg_list)]
                  for arg_list in signature.split('->'))

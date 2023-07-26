@@ -220,10 +220,7 @@ class EinsumTest(jtu.JaxTestCase):
     self._check(s, x, y, z)
 
   # these tests are based on https://github.com/dask/dask/pull/3412/files
-  @parameterized.named_parameters(
-      {"testcase_name": "_{}_dtype={}".format(einstr, dtype.__name__),
-      "einstr": einstr, "dtype": dtype}
-      for einstr in [
+  @parameterized.named_parameters({"testcase_name": f"_{einstr}_dtype={dtype.__name__}", "einstr": einstr, "dtype": dtype} for einstr in [
           'abc,bad->abcd',
           'abcdef,bcdfg->abcdeg',
           'ea,fb,abcd,gc,hd->efgh',
@@ -253,8 +250,7 @@ class EinsumTest(jtu.JaxTestCase):
           'aab,bcc->ac',
           'fdf,cdd,ccd,afe->ae',
           'fff,fae,bef,def->abd',
-      ]
-      for dtype in [np.float32, np.int32, np.complex64, np.bool_])
+      ] for dtype in [np.float32, np.int32, np.complex64, np.bool_])
   def test_from_dask(self, einstr, dtype):
     r = jtu.rand_default()
     if '->' in einstr:
@@ -295,20 +291,20 @@ class EinsumTest(jtu.JaxTestCase):
 
   def test_einsum_kpmurphy_example(self):
     # code from an email with @murphyk
-    N = 2; C = 3; D = 4; K = 5; T = 6;
+    N = 2
+    C = 3
+    D = 4
+    K = 5
+    T = 6;
     r = rng()
     S = r.randn(N, T, K)
     W = r.randn(K, D)
     V = r.randn(D, C)
     L = onp.zeros((N, C))
-    for n in range(N):
-      for c in range(C):
-        s = 0
-        for d in range(D):
-          for k in range(K):
-            for t in range(T):
-                s += S[n,t,k] * W[k,d] * V[d,c]
-        L[n,c] = s
+    for n, c in itertools.product(range(N), range(C)):
+      s = sum(S[n, t, k] * W[k, d] * V[d, c]
+              for d, k, t in itertools.product(range(D), range(K), range(T)))
+      L[n,c] = s
 
     path = np.einsum_path('ntk,kd,dc->nc', S, W, V, optimize='optimal')[0]
     rtol = 1e-2 if jtu.device_under_test() == "tpu" else None

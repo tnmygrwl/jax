@@ -144,7 +144,7 @@ def _sharded_callable(fun, partitions, name, *abstract_args):
     return lambda *_: [core.unit] * len(jaxpr.outvars)
 
 
-  c = xb.make_computation_builder("spjit_{}".format(fun.__name__))
+  c = xb.make_computation_builder(f"spjit_{fun.__name__}")
   xla_consts = _map(c.Constant, consts)
   xla_args = _xla_sharded_args(c, abstract_args, partitions[0])
   axis_env = xla.AxisEnv(nrep, [], [])
@@ -236,12 +236,11 @@ def _sharding_to_proto(sharding):
 
 
 def _get_num_partitions(partitions):
-  num_partitions = onp.prod(onp.max(partitions, axis=0))
-  return num_partitions
+  return onp.prod(onp.max(partitions, axis=0))
 
 
 def get_num_partitions(partitions):
-  num_partitions_set = set(_get_num_partitions(parts) for parts in partitions)
+  num_partitions_set = {_get_num_partitions(parts) for parts in partitions}
   if len(num_partitions_set) > 1:
     raise ValueError(
         "All partition specs must use the same number of total partitions, "
@@ -250,13 +249,11 @@ def get_num_partitions(partitions):
 
 
 def jaxpr_partitions(jaxpr):
-  for eqn in jaxpr.eqns:
-    if eqn.primitive == sharded_call_p:
-      # TODO(skye): change API to support different output partitions
-      return (eqn.params["partitions"][0], (eqn.params["partitions"][1],))
-      # TODO(skye): more error checking
-      # return _get_num_partitions(eqn.params["partitions"][0])
-  return None, None
+  return next(
+      ((eqn.params["partitions"][0], (eqn.params["partitions"][1], ))
+       for eqn in jaxpr.eqns if eqn.primitive == sharded_call_p),
+      (None, None),
+  )
 
 
 

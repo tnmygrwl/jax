@@ -226,5 +226,4 @@ def cache(call):
 
 @transformation
 def hashable_partial(x, *args):
-  ans = yield (x,) + args, {}
-  yield ans
+  yield (yield (x,) + args, {})

@@ -72,7 +72,7 @@ flags.DEFINE_bool("jax_disable_jit",
 
 def _check_callable(fun):
   if not callable(fun):
-    raise TypeError("Expected a callable value, got {}".format(fun))
+    raise TypeError(f"Expected a callable value, got {fun}")
 
 class _ThreadLocalState(threading.local):
   def __init__(self):
@@ -285,10 +285,9 @@ def xla_computation(fun, static_argnums=(), axis_env=None, backend=None,
   def make_axis_env(nreps):
     if axis_env is None:
       return xla.AxisEnv(nreps)
-    else:
-      nreps = nreps * prod(size for name, size in axis_env)
-      names, sizes = zip(*axis_env)
-      return xla.AxisEnv(nreps, names, sizes)
+    nreps = nreps * prod(size for name, size in axis_env)
+    names, sizes = zip(*axis_env)
+    return xla.AxisEnv(nreps, names, sizes)
 
   @wraps(fun)
   def computation_maker(*args, **kwargs):
@@ -307,6 +306,7 @@ def xla_computation(fun, static_argnums=(), axis_env=None, backend=None,
         c, jaxpr, backend, axis_env_, xla_consts,
         extend_name_stack(wrap_name(fun_name, 'xla_computation')), *xla_args)
     return c.Build(c.Tuple(*outs))
+
   return computation_maker
 
 def grad(fun, argnums=0, has_aux=False, holomorphic=False):
@@ -416,10 +416,7 @@ def value_and_grad(fun, argnums=0, has_aux=False, holomorphic=False):
       raise TypeError(msg.format(dtype))
     g = vjp_py(onp.ones((), dtype=dtype))
     g = g[0] if isinstance(argnums, int) else g
-    if not has_aux:
-      return ans, g
-    else:
-      return (ans, aux), g
+    return (ans, g) if not has_aux else ((ans, aux), g)
 
   return value_and_grad_f
 
@@ -428,13 +425,12 @@ def _check_scalar(x):
   try:
     aval = core.get_aval(x)
   except TypeError:
-    raise TypeError(msg("was {}".format(x)))
+    raise TypeError(msg(f"was {x}"))
   else:
-    if isinstance(aval, ShapedArray):
-      if aval.shape != ():
-        raise TypeError(msg("had shape: {}".format(aval.shape)))
-    else:
-      raise TypeError(msg("had abstract value {}".format(aval)))
+    if not isinstance(aval, ShapedArray):
+      raise TypeError(msg(f"had abstract value {aval}"))
+    if aval.shape != ():
+      raise TypeError(msg(f"had shape: {aval.shape}"))
 
 
 def jacfwd(fun, argnums=0, holomorphic=False):
@@ -925,7 +921,7 @@ class _TempAxisName(object):
   def __init__(self, obj):
     self.obj = obj
   def __repr__(self):
-    return '<axis {}>'.format(hex(id(self.obj)))
+    return f'<axis {hex(id(self.obj))}>'
   def __hash__(self):
     return hash(self.obj)
   def __eq__(self, other):
@@ -977,10 +973,7 @@ def _reshape_split(num_chunks, x):
 
 def _reshape_merge(x):
   aval = core.get_aval(x)
-  if aval is core.abstract_unit:
-    return x
-  else:
-    return x.reshape((-1,) + x.shape[2:])
+  return x if aval is core.abstract_unit else x.reshape((-1,) + x.shape[2:])
 
 
 def _papply(fun):
@@ -1049,14 +1042,16 @@ def mask(fun, in_shapes, out_shape):
     flat_fun, out_tree = flatten_fun_nokwargs(f, in_tree)
     outs, out_shapes_ = masking.mask_fun(
         flat_fun, logical_env, padded_env, args_flat, in_shapes)
-    if not out_tree() == out_shapes_tree: raise TypeError("pytree mismatch")
+    if out_tree() != out_shapes_tree: raise TypeError("pytree mismatch")
     out_shapes = map(masking.finalize_spec, out_specs, map(onp.shape, outs))
-    if not out_shapes == list(out_shapes_):
+    if out_shapes != list(out_shapes_):
       raise masking.ShapeError
-    if not all(onp.shape(out) == masking.eval_shape_expr(padded_env, expr)
-               for out, expr in zip(outs, out_shapes)):
+    if any(
+        onp.shape(out) != masking.eval_shape_expr(padded_env, expr)
+        for out, expr in zip(outs, out_shapes)):
       raise masking.ShapeError
     return tree_unflatten(out_tree(), outs)
+
   return wrapped_fun
 
 def _remap_ids(names, shape_spec):
@@ -1072,9 +1067,8 @@ def _bind_shapes(shape_exprs, shapes):
     for poly, d in zip(shape_expr, shape):
       if ensure_poly(poly).is_constant:
         continue
-      else:
-        (binder,), = poly  # TODO generalize to handle striding
-        if env.setdefault(binder, d) != d: raise masking.ShapeError
+      (binder,), = poly  # TODO generalize to handle striding
+      if env.setdefault(binder, d) != d: raise masking.ShapeError
   return env
 
 
@@ -1385,9 +1379,7 @@ def device_put(x, device=None):
 
 # TODO(mattjj): consider revising
 def _device_get(x):
-  if isinstance(x, core.Tracer):
-    return x
-  return x.copy()
+  return x if isinstance(x, core.Tracer) else x.copy()
 
 def device_get(x):
   for y in tree_leaves(x):
@@ -1403,8 +1395,8 @@ def _argnums_partial(f, dyn_argnums, args):
     dyn_argnums = (dyn_argnums,)
   else:
     dyn_argnums = tuple(dyn_argnums)
-  fixed_args = tuple([core.unit if i in dyn_argnums else _wrap_hashably(arg)
-                      for i, arg in enumerate(args)])
+  fixed_args = tuple(core.unit if i in dyn_argnums else _wrap_hashably(arg)
+                     for i, arg in enumerate(args))
   dyn_args = tuple(args[i] for i in dyn_argnums)
   return _argnums_partial_(f, dyn_argnums, fixed_args), dyn_args
 
@@ -1421,14 +1413,13 @@ def _argnums_partial_(dyn_argnums, fixed_args, *dyn_args, **kwargs):
   args = [None if arg is core.unit else arg.val for arg in fixed_args]
   for i, arg in zip(dyn_argnums, dyn_args):
     args[i] = arg
-  ans = yield args, kwargs
-  yield ans
+  yield (yield args, kwargs)
 
 def _check_args(args):
   for arg in args:
     if not (isinstance(arg, core.Tracer) or _valid_jaxtype(arg)):
-      raise TypeError("Argument '{}' of type {} is not a valid JAX type"
-                      .format(arg, type(arg)))
+      raise TypeError(
+          f"Argument '{arg}' of type {type(arg)} is not a valid JAX type")
 
 def _valid_jaxtype(arg):
   try:
@@ -1591,7 +1582,7 @@ def defjvp_all(fun, custom_jvp):
     num_consts, in_tree = params['num_consts'], params['in_tree']
     _, args_flat = split_list(primals, [num_consts])
     consts_dot, args_dot_flat = split_list(tangents, [num_consts])
-    if not all(t is ad_util.zero for t in consts_dot):
+    if any(t is not ad_util.zero for t in consts_dot):
       msg = ("Detected differentiation with respect to closed-over values with "
              "custom JVP rule, which isn't supported.")
       raise ValueError(msg)
@@ -1605,6 +1596,7 @@ def defjvp_all(fun, custom_jvp):
              "and tangents, but they must be equal: {} and {}.")
       raise TypeError(msg.format(out_tree, out_tree2))
     return out_flat, out_dot_flat
+
   ad.primitive_jvps[fun.prim] = custom_transforms_jvp
 
 def defjvp(fun, *jvprules):
@@ -1886,8 +1878,9 @@ def jarrett(fun):
     pushfwd = partial(jvp, fun, primals)
     y, jacs = vmap(pushfwd, out_axes=(None, 0))(_elementwise_std_basis(tangents))
     flat_tangents, _ = tree_flatten(tangents)
-    out_tangent = sum([t * jac for t, jac in zip(flat_tangents, jacs)])
+    out_tangent = sum(t * jac for t, jac in zip(flat_tangents, jacs))
     return y, out_tangent
+
   defjvp_all(new_fun, elementwise_jvp)
 
   return new_fun
@@ -1983,8 +1976,7 @@ class ShapeDtypeStruct(object):
       raise TypeError("len() of unsized object")  # same as numpy error
 
   def __repr__(self):
-    return "{}(shape={}, dtype={})".format(
-        type(self).__name__, self.shape, self.dtype.dtype.name)
+    return f"{type(self).__name__}(shape={self.shape}, dtype={self.dtype.dtype.name})"
 
   __str__ = __repr__
 

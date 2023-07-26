@@ -233,10 +233,7 @@ class APITest(jtu.JaxTestCase):
   def test_switch_value_jit(self):
     def f(x):
       y = x > 0
-      if y:
-        return x
-      else:
-        return -x
+      return x if y else -x
 
     assert grad(f)(1.0) == 1.0
     assert grad(f)(-1.0) == -1.0
@@ -901,8 +898,7 @@ class APITest(jtu.JaxTestCase):
     self.assertEqual(s.size, i * 2 * 3)
     self.assertLen(s, i)
     for f in (str, repr):
-      self.assertEqual(
-          f(s), "ShapeDtypeStruct(shape=({}, 2, 3), dtype=float32)".format(i))
+      self.assertEqual(f(s), f"ShapeDtypeStruct(shape=({i}, 2, 3), dtype=float32)")
 
   def test_shape_dtype_struct_scalar(self):
     s = api.ShapeDtypeStruct(shape=(), dtype=np.float32)
@@ -1013,20 +1009,6 @@ class APITest(jtu.JaxTestCase):
     # make_jaxpr (and jit) to stage out sub-calls fully, this test started to
     # fail; I left it in as skipped because deleting tests feels wrong.
     raise unittest.SkipTest("obsolete test")
-
-    @api.jit
-    def f(a, b, c):
-      a = lax.broadcast(a, (2,))
-      return lax.select(a, b, c)
-
-    a = onp.ones((3, 3), dtype=onp.bool_)
-    b = onp.ones((2, 3, 3))
-    c = onp.ones((2, 3, 3))
-
-    jaxpr = api.make_jaxpr(lambda b, c: f(a, b, c))(b, c)
-    subjaxpr = next(eqn.params["call_jaxpr"] for eqn in jaxpr.jaxpr.eqns
-                    if "call_jaxpr" in eqn.params)
-    self.assertEqual(len(subjaxpr.eqns), 1)
 
   def test_grad_of_int_errors(self):
     dfn = grad(lambda x: x ** 2)
@@ -1462,10 +1444,7 @@ class APITest(jtu.JaxTestCase):
   def test_remat_grad_python_control_flow(self):
     @partial(api.remat, concrete=True)
     def g(x):
-      if x > 0:
-        return lax.sin(x), 3.
-      else:
-        return lax.cos(x), 4.
+      return (lax.sin(x), 3.) if x > 0 else (lax.cos(x), 4.)
 
     def f(x):
       x, _ = g(x)
@@ -1581,10 +1560,9 @@ class APITest(jtu.JaxTestCase):
     def binom_checkpoint(funs):
       if len(funs) == 1:
         return funs[0]
-      else:
-        f1 = binom_checkpoint(funs[:len(funs)//2])
-        f2 = binom_checkpoint(funs[len(funs)//2:])
-        return api.remat(lambda x: f1(f2(x)))
+      f1 = binom_checkpoint(funs[:len(funs)//2])
+      f2 = binom_checkpoint(funs[len(funs)//2:])
+      return api.remat(lambda x: f1(f2(x)))
 
     f1 = binom_checkpoint([np.sin, np.sin, np.sin, np.sin])
     f2 = lambda x: np.sin(np.sin(np.sin(np.sin(x))))

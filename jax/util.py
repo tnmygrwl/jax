@@ -24,14 +24,14 @@ import numpy as onp
 def safe_zip(*args):
   n = len(args[0])
   for arg in args[1:]:
-    assert len(arg) == n, 'length mismatch: {}'.format(list(map(len, args)))
+    assert len(arg) == n, f'length mismatch: {list(map(len, args))}'
   return list(zip(*args))
 
 def safe_map(f, *args):
   args = list(map(list, args))
   n = len(args[0])
   for arg in args[1:]:
-    assert len(arg) == n, 'length mismatch: {}'.format(list(map(len, args)))
+    assert len(arg) == n, f'length mismatch: {list(map(len, args))}'
   return list(map(f, *args))
 
 def unzip2(xys):
@@ -227,7 +227,7 @@ def get_module_functions(module):
   return module_fns
 
 def wrap_name(name, transform_name):
-  return transform_name + '(' + name + ')'
+  return f'{transform_name}({name})'
 
 def extend_name_stack(stack, name=''):
   return stack + name + '/'

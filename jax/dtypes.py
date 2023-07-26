@@ -104,7 +104,7 @@ def scalar_type_of(x):
   elif onp.issubdtype(typ, onp.complexfloating):
     return complex
   else:
-    raise TypeError("Invalid scalar value {}".format(x))
+    raise TypeError(f"Invalid scalar value {x}")
 
 def coerce_to_array(x):
   """Coerces a scalar or NumPy array to an onp.array.
@@ -206,7 +206,7 @@ def promote_types(a, b):
     return _type_promotion_table[_jax_type_nums[a], _jax_type_nums[b]]
   except KeyError:
     pass
-  raise TypeError("Invalid type promotion of {} and {}".format(a, b))
+  raise TypeError(f"Invalid type promotion of {a} and {b}")
 
 
 def is_python_scalar(x):
@@ -225,7 +225,7 @@ def _dtype_priority(dtype):
   elif issubdtype(dtype, onp.complexfloating):
     return 3
   else:
-    raise TypeError("Dtype {} is not supported by JAX".format(dtype))
+    raise TypeError(f"Dtype {dtype} is not supported by JAX")
 
 def dtype(x):
   if type(x) in python_scalar_dtypes:

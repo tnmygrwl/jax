@@ -19,8 +19,7 @@ from .util import safe_map
 
 map = safe_map
 
-jaxval_adders = {}
-jaxval_adders[Unit] = lambda _, __: unit
+jaxval_adders = {Unit: lambda _, __: unit}
 
 def add_jaxvals(x, y):
   return add_jaxvals_p.bind(x, y)
@@ -41,8 +40,7 @@ jaxval_zeros_likers = {}
 def zeros_like_aval(aval):
   return aval_zeros_likers[type(aval)](aval)
 
-aval_zeros_likers = {}
-aval_zeros_likers[AbstractUnit] = lambda _: unit
+aval_zeros_likers = {AbstractUnit: lambda _: unit}
 
 def zeros_like_jaxval(val):
   return zeros_like_p.bind(val)

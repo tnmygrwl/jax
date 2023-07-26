@@ -130,32 +130,14 @@ INITIALIZER_RECS = [
 
 class NNInitializersTest(jtu.JaxTestCase):
 
-  @parameterized.named_parameters(jtu.cases_from_list(
-      {"testcase_name":
-       "_{}_{}".format(
-           rec.name,
-           jtu.format_shape_dtype_string(shape, dtype)),
-       "initializer": rec.initializer(),
-       "shape": shape, "dtype": dtype}
-      for rec in INITIALIZER_RECS
-      for shape in rec.shapes
-      for dtype in [onp.float32, onp.float64]))
+  @parameterized.named_parameters(jtu.cases_from_list({"testcase_name": f"_{rec.name}_{jtu.format_shape_dtype_string(shape, dtype)}", "initializer": rec.initializer(), "shape": shape, "dtype": dtype} for rec in INITIALIZER_RECS for shape in rec.shapes for dtype in [onp.float32, onp.float64]))
   def testInitializer(self, initializer, shape, dtype):
     rng = random.PRNGKey(0)
     val = initializer(rng, shape, dtype)
     self.assertEqual(shape, np.shape(val))
     self.assertEqual(jax.dtypes.canonicalize_dtype(dtype), np.dtype(val))
 
-  @parameterized.named_parameters(jtu.cases_from_list(
-      {"testcase_name":
-       "_{}_{}".format(
-           rec.name,
-           jtu.format_shape_dtype_string(shape, dtype)),
-       "initializer_provider": rec.initializer,
-       "shape": shape, "dtype": dtype}
-      for rec in INITIALIZER_RECS
-      for shape in rec.shapes
-      for dtype in [onp.float32, onp.float64]))
+  @parameterized.named_parameters(jtu.cases_from_list({"testcase_name": f"_{rec.name}_{jtu.format_shape_dtype_string(shape, dtype)}", "initializer_provider": rec.initializer, "shape": shape, "dtype": dtype} for rec in INITIALIZER_RECS for shape in rec.shapes for dtype in [onp.float32, onp.float64]))
   def testInitializerProvider(self, initializer_provider, shape, dtype):
     rng = random.PRNGKey(0)
     initializer = initializer_provider(dtype=dtype)

@@ -129,6 +129,7 @@ def BatchNorm(axis=(0, 1, 2), epsilon=1e-5, center=True, scale=True,
     k1, k2 = random.split(rng)
     beta, gamma = _beta_init(k1, shape), _gamma_init(k2, shape)
     return input_shape, (beta, gamma)
+
   def apply_fun(params, x, **kwargs):
     beta, gamma = params
     # TODO(phawkins): np.expand_dims should accept an axis tuple.
@@ -139,8 +140,8 @@ def BatchNorm(axis=(0, 1, 2), epsilon=1e-5, center=True, scale=True,
     z = normalize(x, axis, epsilon=epsilon)
     if center and scale: return gamma * z + beta
     if center: return z + beta
-    if scale: return gamma * z
-    return z
+    return gamma * z if scale else z
+
   return init_fun, apply_fun
 
 

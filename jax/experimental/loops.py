@@ -180,7 +180,7 @@ class Scope(object):
     # TODO: share these checks with lax_control_flow.cond
     if len(onp.shape(pred)) != 0:
       raise TypeError(
-        "Pred must be a scalar, got {} of shape {}.".format(pred, onp.shape(pred)))
+          f"Pred must be a scalar, got {pred} of shape {onp.shape(pred)}.")
 
     try:
       pred_dtype = onp.result_type(pred)
@@ -220,7 +220,7 @@ class Scope(object):
     self._active_ranges.append(range_)
 
   def _pop_range(self, range_):
-    if not (range_ is self._active_ranges[-1]):
+    if range_ is not self._active_ranges[-1]:
       self._error_premature_exit_range()
     self._active_ranges.pop()
 
@@ -237,8 +237,7 @@ class Scope(object):
     """
     mt_val = self._mutable_state.get(key)
     if mt_val is None:
-      raise AttributeError(
-        "Reading uninitialized data '{}' from the scope.".format(key))
+      raise AttributeError(f"Reading uninitialized data '{key}' from the scope.")
     return mt_val
 
   def __setattr__(self, key, value):
@@ -248,25 +247,23 @@ class Scope(object):
     """
     if key in ["_active_ranges", "_mutable_state"]:
       object.__setattr__(self, key, value)
+    elif self._active_ranges and key not in self._mutable_state:
+      raise ValueError(f"New mutable state '{key}' cannot be created inside a loop.")
     else:
-      if self._active_ranges and key not in self._mutable_state:
-        raise ValueError(
-          "New mutable state '{}' cannot be created inside a loop.".format(key))
       self._mutable_state[key] = value
 
   def __enter__(self):
     return self
 
   def __exit__(self, exc_type, exc_val, exc_tb):
-    if exc_type is None:
-      if self._active_ranges:  # We have some ranges that we did not exit properly
-        self._error_premature_exit_range()
-      return True
-    else:
+    if exc_type is not None:
       # The exception may come from inside one or more ranges. We let the current
       # exception propagate, assuming it terminates the tracing. If not, the
       # tracers may be left in an inconsistent state.
       return False  # re-raise
+    if self._active_ranges:  # We have some ranges that we did not exit properly
+      self._error_premature_exit_range()
+    return True
 
 
 class _BodyTracer(object):
@@ -301,10 +298,7 @@ class _BodyTracer(object):
 
   def location(self):
     """A multiline string representing the source location of the range."""
-    if self.stack is not None:
-      return "   ".join(self.stack.format())
-    else:
-      return ""
+    return "   ".join(self.stack.format()) if self.stack is not None else ""
 
   def __iter__(self):
     """Called before starting the first iteration."""
@@ -359,8 +353,8 @@ class _BodyTracer(object):
     # Make the jaxpr for the body of the loop
     # TODO: See which mutable state was changed in the one iteration.
     # For now, we assume all state changes.
-    body_out_tracers = tuple([self.scope._mutable_state[ms]
-                              for ms in self.carried_state_names])
+    body_out_tracers = tuple(self.scope._mutable_state[ms]
+                             for ms in self.carried_state_names)
     try:
       # If the body actually uses the index variable, and is not allowed to
       # (e.g., cond_range and while_range), then in_tracers will not contain
@@ -378,8 +372,8 @@ class _BodyTracer(object):
     # End the subtrace for the loop body, before we trace the condition
     _BodyTracer.end_subtrace()
 
-    carried_init_val = tuple([self.carried_state_initial[ms]
-                              for ms in self.carried_state_names])
+    carried_init_val = tuple(self.carried_state_initial[ms]
+                             for ms in self.carried_state_names)
     carried_init_vals, carried_tree = tree_util.tree_flatten(carried_init_val)
 
     carried_out_vals = self.loop_builder.build_output_vals(
@@ -540,7 +534,7 @@ class _WhileBuilder(_LoopBuilder):
       res = self.cond_func()
       # Conditional function is not allowed to modify the scope state
       for ms, init_ms in zip(carried_state_names, args):
-        if not (scope._mutable_state[ms] is init_ms):
+        if scope._mutable_state[ms] is not init_ms:
           msg = "Conditional function modifies scope.{} field."
           raise ValueError(msg.format(ms))
       return res

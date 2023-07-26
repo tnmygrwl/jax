@@ -45,14 +45,6 @@ class MetadataTest(jtu.JaxTestCase):
 
   def test_primitive_metadata(self):
     raise SkipTest              # TODO(jekbradbury)
-    _ = jnp.sin(1.)
-    assert self.op_types[-1] == 'sin'
-    assert self.op_names[-1] == 'sin'
-    _ = jnp.reshape(1., (1,))
-    assert self.op_types[-1] == 'reshape'
-    assert self.op_names[-1] == 'reshape[ dimensions=None\n' \
-                                '         new_sizes=(1,)\n' \
-                                '         old_sizes=() ]'
 
   def test_jit_metadata(self):
     _ = jax.jit(jnp.sin)(1.)
@@ -66,25 +58,6 @@ class MetadataTest(jtu.JaxTestCase):
 
   def test_nested_jit_metadata(self):
     raise SkipTest              # TODO(jekbradbury)
-    @jax.jit
-    def foo(x):
-      return jnp.sin(x)
-    def bar(x):
-      return jnp.cos(foo(x))
-    _ = bar(1.)
-    assert self.op_types[-2] == 'sin'
-    assert self.op_names[-2] == 'jit(foo)/sin'
-    assert self.op_types[-1] == 'cos'
-    assert self.op_names[-1] == 'cos'
-    _ = jax.jit(bar)(1.)
-    assert self.op_types[-3] == 'xla_call'
-    assert self.op_names[-3] == 'jit(bar)/xla_call[ backend=None\n' \
-                                '                   device=None\n' \
-                                '                   name=foo ]'
-    assert self.op_types[-2] == 'sin'
-    assert self.op_names[-2] == 'jit(bar)/jit(foo)/sin'
-    assert self.op_types[-1] == 'cos'
-    assert self.op_names[-1] == 'jit(bar)/cos'
 
   def test_grad_jit_metadata(self):
     @jax.jit

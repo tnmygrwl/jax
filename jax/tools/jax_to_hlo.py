@@ -94,12 +94,12 @@ def jax_to_hlo(fn, input_shapes, constants=None):
   if not constants:
     constants = {}
 
-  overlapping_args = set(arg_name for arg_name, _ in input_shapes) & set(
-      constants.keys())
+  overlapping_args = {arg_name
+                      for arg_name, _ in input_shapes} & set(constants.keys())
   if overlapping_args:
     raise ValueError(
-        'Arguments appear in both `input_shapes` and `constants`: %s' %
-        ', '.join(sorted(overlapping_args)))
+        f"Arguments appear in both `input_shapes` and `constants`: {', '.join(sorted(overlapping_args))}"
+    )
 
   args = []
   for arg_name, shape in input_shapes:
@@ -163,7 +163,7 @@ def main(argv):
       v = np.asarray(v)
     if k in constants:
       raise ValueError(
-          'Argument appears in both --constants and --evaled_constants: %s' % k)
+          f'Argument appears in both --constants and --evaled_constants: {k}')
     constants[k] = v
 
   hlo_proto, hlo_text = jax_to_hlo(fn, input_shapes, constants)

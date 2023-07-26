@@ -448,9 +448,8 @@ class LaxControlFlowTest(jtu.JaxTestCase):
     def fun(x):
       if x < 3:
         return (x, x)
-      else:
-        y = lax.mul(2, x)
-        return y, lax.mul(2, y)
+      y = lax.mul(2, x)
+      return y, lax.mul(2, y)
 
     @api.jit
     def cfun(x):
@@ -494,10 +493,7 @@ class LaxControlFlowTest(jtu.JaxTestCase):
       if x < 2:
         return lax.mul(2, x)
       else:
-        if x < 5:
-          return lax.mul(3, x)
-        else:
-          return lax.mul(4, x)
+        return lax.mul(3, x) if x < 5 else lax.mul(4, x)
 
     @api.jit
     def cfun(x):
@@ -546,10 +542,7 @@ class LaxControlFlowTest(jtu.JaxTestCase):
 
   def testCondOneBranchConstant(self):
     def fun(x):
-      if x < 3:
-        return 5.
-      else:
-        return x
+      return 5. if x < 3 else x
 
     @api.jit
     def cfun(x):
@@ -562,10 +555,7 @@ class LaxControlFlowTest(jtu.JaxTestCase):
 
   def testCondOneBranchConstantTuple(self):
     def fun(x):
-      if x < 3:
-        return (1., 2., 3.)
-      else:
-        return (x, 2., 4.)
+      return (1., 2., 3.) if x < 3 else (x, 2., 4.)
 
     @api.jit
     def cfun(x):
@@ -634,9 +624,8 @@ class LaxControlFlowTest(jtu.JaxTestCase):
     def fun_ref(x):
       if x < 3:
         return (x, x)
-      else:
-        y = 2 * x
-        return y, 2 * y
+      y = 2 * x
+      return y, 2 * y
 
     def fun(x):
       def false_fun(x):
@@ -658,10 +647,7 @@ class LaxControlFlowTest(jtu.JaxTestCase):
 
   def testCondJVP2(self):
     def fun_ref(x):
-      if x < 3:
-        return 2.
-      else:
-        return 2. * x
+      return 2. if x < 3 else 2. * x
 
     def fun(x):
       return lax.cond(x < 3, (), lambda _: 2., x, lambda x: 2. * x)
@@ -724,10 +710,7 @@ class LaxControlFlowTest(jtu.JaxTestCase):
 
   def testCondGrad3(self):
     def fun_ref(x):
-      if x < 3:
-        return 2.
-      else:
-        return 2. * x
+      return 2. if x < 3 else 2. * x
 
     def fun(x):
       return lax.cond(x < 3, (), lambda _: 2., x, lambda x: 2. * x)
@@ -746,10 +729,7 @@ class LaxControlFlowTest(jtu.JaxTestCase):
 
   def testCondGrad4(self):
     def fun_ref(x, y):
-      if x < 3:
-        return 2. * np.sin(y)
-      else:
-        return 2. * np.cos(x)
+      return 2. * np.sin(y) if x < 3 else 2. * np.cos(x)
 
     def fun(x, y):
       return lax.cond(
@@ -887,11 +867,7 @@ class LaxControlFlowTest(jtu.JaxTestCase):
 
     if jit_f:
       f = api.jit(f)
-    if jit_scan:
-      scan = api.jit(lax.scan, (0,))
-    else:
-      scan = lax.scan
-
+    scan = api.jit(lax.scan, (0,)) if jit_scan else lax.scan
     as_ = rng.randn(5, 3)
     c = rng.randn(4)
 
@@ -918,11 +894,7 @@ class LaxControlFlowTest(jtu.JaxTestCase):
 
     if jit_f:
       f = api.jit(f)
-    if jit_scan:
-      scan = api.jit(lax.scan, (0,))
-    else:
-      scan = lax.scan
-
+    scan = api.jit(lax.scan, (0,)) if jit_scan else lax.scan
     as_ = rng.randn(5, 3)
     c = rng.randn(4)
 
@@ -952,11 +924,7 @@ class LaxControlFlowTest(jtu.JaxTestCase):
 
     if jit_f:
       f = api.jit(f)
-    if jit_scan:
-      scan = api.jit(lax.scan, (0,))
-    else:
-      scan = lax.scan
-
+    scan = api.jit(lax.scan, (0,)) if jit_scan else lax.scan
     as_ = rng.randn(5, 3)
     c = rng.randn(4)
 
@@ -985,11 +953,7 @@ class LaxControlFlowTest(jtu.JaxTestCase):
 
     if jit_f:
       f = api.jit(f)
-    if jit_scan:
-      scan = api.jit(lax.scan, static_argnums=(0,))
-    else:
-      scan = lax.scan
-
+    scan = api.jit(lax.scan, static_argnums=(0,)) if jit_scan else lax.scan
     as_ = rng.randn(5, 3)
     c = rng.randn(4)
 
@@ -1170,11 +1134,7 @@ class LaxControlFlowTest(jtu.JaxTestCase):
 
     if jit_f:
       f = api.jit(f)
-    if jit_scan:
-      scan = api.jit(lax.scan, (0,))
-    else:
-      scan = lax.scan
-
+    scan = api.jit(lax.scan, (0,)) if jit_scan else lax.scan
     as_shape = [5, 3]
     c_shape = [4]
 
@@ -1299,39 +1259,11 @@ class LaxControlFlowTest(jtu.JaxTestCase):
     # core.TypedJaxpr (see #1221).
     raise SkipTest("not implemented")
 
-    def cond(x):
-      assert python_should_be_executing
-      return x < 5
-
-    def body(x):
-      assert python_should_be_executing
-      return x + 2
-
-    python_should_be_executing = True
-    lax.while_loop(cond, body, 0)
-
-    def cond(x):
-      assert python_should_be_executing
-      return x < 5
-
-    def body(x):
-      assert python_should_be_executing
-      return x + 2
-
-    python_should_be_executing = False
-    lax.while_loop(cond, body, 0)
-
   def testWhileCondConstant(self):
     out = lax.while_loop(lambda _: False, lambda _: (), ())  # doesn't crash
     self.assertEqual(out, ())
 
-  @parameterized.named_parameters(
-      {"testcase_name": "_jit_loop={}_jit_body={}_jit_cond={}".format(
-          jit_loop, jit_body, jit_cond),
-       "jit_loop": jit_loop, "jit_body": jit_body, "jit_cond": jit_cond}
-      for jit_loop in [False, True]
-      for jit_body in [False, True]
-      for jit_cond in [False, True])
+  @parameterized.named_parameters({"testcase_name": f"_jit_loop={jit_loop}_jit_body={jit_body}_jit_cond={jit_cond}", "jit_loop": jit_loop, "jit_body": jit_body, "jit_cond": jit_cond} for jit_loop in [False, True] for jit_body in [False, True] for jit_cond in [False, True])
   def testWhileJVP(self, jit_loop, jit_body, jit_cond):
     cond = lambda x: x[0, 2] <= 8
     body = lambda x: x * x
