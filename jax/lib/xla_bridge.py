@@ -233,7 +233,7 @@ def host_id(backend=None):
 
 def host_ids(backend=None):
   """Returns a list of all host IDs."""
-  return list(set(d.host_id for d in devices(backend)))
+  return list({d.host_id for d in devices(backend)})
 
 
 def host_count(backend=None):
@@ -263,7 +263,7 @@ def normalize_to_xla_dtypes(val):
                        dtype=dtypes.canonicalize_dtype(dtypes.result_type(val)))
   elif isinstance(val, (tuple, list)):
     return tuple(normalize_to_xla_dtypes(x) for x in val)
-  raise TypeError('Can\'t convert to XLA: {}'.format(val))
+  raise TypeError(f"Can\'t convert to XLA: {val}")
 
 
 class _JaxComputationBuilder(xla_client.ComputationBuilder):
@@ -302,7 +302,7 @@ class _JaxComputationBuilder(xla_client.ComputationBuilder):
     if py_type in _constant_handlers:
       return _constant_handlers[py_type](self, py_val, canonicalize_types)
     else:
-      raise TypeError("No constant handler for type: {}".format(py_type))
+      raise TypeError(f"No constant handler for type: {py_type}")
 
   # TODO(mattjj): remove when CrossReplicaSum is added to XLA:CPU
   def CrossReplicaSum(self, operand, replica_groups):
@@ -350,19 +350,17 @@ def _ndarray_constant_handler(c, val, canonicalize_types=True):
     An XLA ComputationDataHandle / XlaOp representing the constant ndarray
     staged into the XLA Computation.
   """
-  # TODO(mattjj): revise this to use c.BroadcastInDim rather than Transpose
-  if onp.any(onp.equal(0, val.strides)) and val.size > 0:
-    zero_stride_axes, = onp.where(onp.equal(0, val.strides))
-    other_axes, = onp.where(onp.not_equal(0, val.strides))
-    collapsed_val = val[tuple(0 if ax in zero_stride_axes else slice(None)
-                              for ax in range(val.ndim))]
-    xla_val = c.Broadcast(
-        c.NumpyArrayConstant(collapsed_val, canonicalize_types),
-        onp.take(val.shape, zero_stride_axes))
-    permutation = onp.argsort(tuple(zero_stride_axes) + tuple(other_axes))
-    return c.Transpose(xla_val, permutation)
-  else:
+  if not onp.any(onp.equal(0, val.strides)) or val.size <= 0:
     return c.NumpyArrayConstant(val, canonicalize_types)
+  zero_stride_axes, = onp.where(onp.equal(0, val.strides))
+  other_axes, = onp.where(onp.not_equal(0, val.strides))
+  collapsed_val = val[tuple(0 if ax in zero_stride_axes else slice(None)
+                            for ax in range(val.ndim))]
+  xla_val = c.Broadcast(
+      c.NumpyArrayConstant(collapsed_val, canonicalize_types),
+      onp.take(val.shape, zero_stride_axes))
+  permutation = onp.argsort(tuple(zero_stride_axes) + tuple(other_axes))
+  return c.Transpose(xla_val, permutation)
 register_constant_handler(onp.ndarray, _ndarray_constant_handler)
 
 

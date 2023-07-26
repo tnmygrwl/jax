@@ -244,8 +244,8 @@ def ndtr(x):
   dtype = lax.dtype(x)
   if dtype not in (np.float32, np.float64):
     raise TypeError(
-        "x.dtype={} is not supported, see docstring for supported types."
-        .format(dtype))
+        f"x.dtype={dtype} is not supported, see docstring for supported types."
+    )
   return _ndtr(x)
 
 
@@ -285,8 +285,8 @@ def ndtri(p):
   dtype = lax.dtype(p)
   if dtype not in (np.float32, np.float64):
     raise TypeError(
-        "x.dtype={} is not supported, see docstring for supported types."
-        .format(dtype))
+        f"x.dtype={dtype} is not supported, see docstring for supported types."
+    )
   return _ndtri(p)
 
 
@@ -477,7 +477,7 @@ def log_ndtr(x, series_order=3):
     lower_segment = _LOGNDTR_FLOAT32_LOWER
     upper_segment = _LOGNDTR_FLOAT32_UPPER
   else:
-    raise TypeError("x.dtype={} is not supported.".format(onp.dtype(dtype)))
+    raise TypeError(f"x.dtype={onp.dtype(dtype)} is not supported.")
 
   # The basic idea here was ported from:
   #   https://root.cern.ch/doc/v608/SpecFuncCephesInv_8cxx_source.html

@@ -60,12 +60,7 @@ class DLPackTest(jtu.JaxTestCase):
     if jtu.device_under_test() == "tpu":
       self.skipTest("DLPack not supported on TPU")
 
-  @parameterized.named_parameters(jtu.cases_from_list(
-     {"testcase_name": "_{}".format(
-        jtu.format_shape_dtype_string(shape, dtype)),
-     "shape": shape, "dtype": dtype}
-     for shape in all_shapes
-     for dtype in dlpack_dtypes))
+  @parameterized.named_parameters(jtu.cases_from_list({"testcase_name": f"_{jtu.format_shape_dtype_string(shape, dtype)}", "shape": shape, "dtype": dtype} for shape in all_shapes for dtype in dlpack_dtypes))
   def testJaxRoundTrip(self, shape, dtype):
     rng = jtu.rand_default()
     np = rng(shape, dtype)
@@ -78,12 +73,7 @@ class DLPackTest(jtu.JaxTestCase):
                            "DLPack tensor may be consumed at most once",
                            lambda: jax.dlpack.from_dlpack(dlpack))
 
-  @parameterized.named_parameters(jtu.cases_from_list(
-     {"testcase_name": "_{}".format(
-        jtu.format_shape_dtype_string(shape, dtype)),
-     "shape": shape, "dtype": dtype}
-     for shape in all_shapes
-     for dtype in torch_dtypes))
+  @parameterized.named_parameters(jtu.cases_from_list({"testcase_name": f"_{jtu.format_shape_dtype_string(shape, dtype)}", "shape": shape, "dtype": dtype} for shape in all_shapes for dtype in torch_dtypes))
   @unittest.skipIf(not torch, "Test requires PyTorch")
   def testTorchToJax(self, shape, dtype):
     rng = jtu.rand_default()
@@ -94,15 +84,9 @@ class DLPackTest(jtu.JaxTestCase):
     y = jax.dlpack.from_dlpack(dlpack)
     self.assertAllClose(np, y, check_dtypes=True)
 
-  @parameterized.named_parameters(jtu.cases_from_list(
-     {"testcase_name": "_{}".format(
-        jtu.format_shape_dtype_string(shape, dtype)),
-     "shape": shape, "dtype": dtype}
-     for shape in all_shapes
-     for dtype in torch_dtypes))
+  @parameterized.named_parameters(jtu.cases_from_list({"testcase_name": f"_{jtu.format_shape_dtype_string(shape, dtype)}", "shape": shape, "dtype": dtype} for shape in all_shapes for dtype in torch_dtypes))
   @unittest.skipIf(not torch or jax.lib.version <= (0, 1, 38),
                    "Test requires PyTorch and jaxlib >= 0.1.39")
-  # TODO(phawkins): the dlpack destructor issues errors in jaxlib 0.1.38.
   def testJaxToTorch(self, shape, dtype):
     rng = jtu.rand_default()
     np = rng(shape, dtype)
@@ -118,12 +102,7 @@ class CudaArrayInterfaceTest(jtu.JaxTestCase):
     if jtu.device_under_test() != "gpu":
       self.skipTest("__cuda_array_interface__ is only supported on GPU")
 
-  @parameterized.named_parameters(jtu.cases_from_list(
-     {"testcase_name": "_{}".format(
-        jtu.format_shape_dtype_string(shape, dtype)),
-     "shape": shape, "dtype": dtype}
-     for shape in all_shapes
-     for dtype in dlpack_dtypes))
+  @parameterized.named_parameters(jtu.cases_from_list({"testcase_name": f"_{jtu.format_shape_dtype_string(shape, dtype)}", "shape": shape, "dtype": dtype} for shape in all_shapes for dtype in dlpack_dtypes))
   @unittest.skipIf(not cupy or jax.lib.version <= (0, 1, 38),
                    "Test requires CuPy and jaxlib >= 0.1.39")
   def testJaxToCuPy(self, shape, dtype):

@@ -175,7 +175,7 @@ def pshuffle(x, axis_name, perm):
   """
   if set(perm) != set(range(len(perm))):
     raise AssertionError(
-      "Given `perm` does not represent a real permutation: {}".format(perm))
+        f"Given `perm` does not represent a real permutation: {perm}")
   return ppermute(x, axis_name, list(zip(perm, range(len(perm)))))
 
 
@@ -301,7 +301,7 @@ pxla.split_axis_rules[pmin_p] = \
 def _ppermute_translation_rule(c, x, replica_groups, perm):
   group_size = len(replica_groups[0])
   srcs, dsts = unzip2((src % group_size, dst % group_size) for src, dst in perm)
-  if not (len(srcs) == len(set(srcs)) and len(dsts) == len(set(dsts))):
+  if len(srcs) != len(set(srcs)) or len(dsts) != len(set(dsts)):
     msg = "ppermute sources and destinations must be unique, got {}."
     raise ValueError(msg.format(perm))
 
@@ -390,14 +390,13 @@ def _broadcasting_papply(prim, name, size, vals, axes, **params):
     if y.shape[y_tosplit] == 1:
       y = _allgather(y, ydim, size, name)
       y = y.reshape(onp.delete(y.shape, xdim))
-      return prim.bind(x, y, **params), ydim
     elif x.shape[x_tosplit] == 1:
       x = _allgather(x, xdim, size, name)
       x = x.reshape(onp.delete(x.shape, ydim))
-      return prim.bind(x, y, **params), ydim
     else:
       x = all_to_all(x, name, x_tosplit, xdim)
-      return prim.bind(x, y, **params), ydim
+
+    return prim.bind(x, y, **params), ydim
 
 def _defbroadcasting(prim):
   parallel.papply_primitive_rules[prim] = partial(_broadcasting_papply, prim)
@@ -428,9 +427,8 @@ def _reducer_papply(prim, cprim, name, size, vals, papply_axes, axes, **kwargs):
 
   if not axes or papply_axis in axes:
     return cprim.bind(result, axis_name=name), None
-  else:
-    new_papply_axis = papply_axis - onp.sum(onp.less(other_axes, papply_axis))
-    return result, new_papply_axis
+  new_papply_axis = papply_axis - onp.sum(onp.less(other_axes, papply_axis))
+  return result, new_papply_axis
 
 def _defreducer(prim, collective_prim):
   parallel.papply_primitive_rules[prim] = partial(_reducer_papply, prim, collective_prim)
@@ -590,18 +588,17 @@ def _dot_general_papply_rule(name, size, vals, dims, dimension_numbers,
       if ydim in yc:
         # case g: x not split, y split and contracting
         return False, 'one operand split and contracting, other is not split'
-      else:
-        # case h: x not split, y split but not contracting
-        assert ydim is not None
-        # TODO(frostig): Might the following work?
-        # z = lax.dot_general(
-        #     x, y, sub_dims(None, ydim, xc, yc, xb, yb), precision)
-        # zdim = (
-        #     ydim + len(xb) +                # batch dimensions
-        #     x.ndim - len(xc) -              # non-contracting x dimensions
-        #     len([d for d in range(ydim) if d in yc]))
-        # return True, (z, zdim)
-        return False, 'lhs not split, rhs split but not contracting'
+      # case h: x not split, y split but not contracting
+      assert ydim is not None
+      # TODO(frostig): Might the following work?
+      # z = lax.dot_general(
+      #     x, y, sub_dims(None, ydim, xc, yc, xb, yb), precision)
+      # zdim = (
+      #     ydim + len(xb) +                # batch dimensions
+      #     x.ndim - len(xc) -              # non-contracting x dimensions
+      #     len([d for d in range(ydim) if d in yc]))
+      # return True, (z, zdim)
+      return False, 'lhs not split, rhs split but not contracting'
 
     assert False, 'unreachable'
 
@@ -711,8 +708,8 @@ def _broadcast_in_dim_papply_rule(name, size, vals, dims, shape,
   out_dim = broadcast_dimensions[dim]
   if shape[out_dim] != shape[dim]:
     raise ValueError(
-        "broadcast_in_dim changes hidden dimension size: {} to {}".format(
-            shape[dim], shape[out_dim]))
+        f"broadcast_in_dim changes hidden dimension size: {shape[dim]} to {shape[out_dim]}"
+    )
   sub_bdims = tuple(onp.delete(broadcast_dimensions, dim))
   sub_shape = tuple(onp.delete(shape, out_dim))
   return lax.broadcast_in_dim(operand, sub_shape, sub_bdims), out_dim
@@ -723,16 +720,15 @@ def _pad_papply_rule(name, size, vals, dims, padding_config):
   operand_dim, padding_value_dim = dims
   assert padding_value_dim is None
   padding_config = list(padding_config)
-  if padding_config[operand_dim] == (0, 0, 0):
-    padded = lax.pad(
-        operand,
-        padding_value,
-        padding_config[:operand_dim] + padding_config[operand_dim + 1:])
-    return padded, operand_dim
-  else:
+  if padding_config[operand_dim] != (0, 0, 0):
     raise NotImplementedError(
-        'pad changes size of hidden dimension {} with config {}'.format(
-            operand_dim, padding_config))
+        f'pad changes size of hidden dimension {operand_dim} with config {padding_config}'
+    )
+  padded = lax.pad(
+      operand,
+      padding_value,
+      padding_config[:operand_dim] + padding_config[operand_dim + 1:])
+  return padded, operand_dim
 
 
 def _slice_papply_rule(name, size, vals, dims, start_indices, limit_indices,

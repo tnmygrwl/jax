@@ -60,8 +60,7 @@ class UnshapedArray(core.AbstractValue):
     return hash((self.dtype, self.weak_type))
 
   def __repr__(self):
-    return '{}({}{})'.format(self.__class__.__name__, self.str_short(),
-                             ", weak_type=True" if self.weak_type else "")
+    return f'{self.__class__.__name__}({self.str_short()}{", weak_type=True" if self.weak_type else ""})'
 
   _bool = _nonzero = concretization_function_error(bool)
   _float   = concretization_function_error(
@@ -77,13 +76,12 @@ class UnshapedArray(core.AbstractValue):
     return self
 
   def join(self, other):
-    if self.dtype == other.dtype:
-      if self.weak_type == other.weak_type:
-        return self
-      else:
-        return UnshapedArray(self.dtype, weak_type=False)
-    else:
+    if self.dtype != other.dtype:
       raise TypeError(self, other)
+    if self.weak_type == other.weak_type:
+      return self
+    else:
+      return UnshapedArray(self.dtype, weak_type=False)
 
   def str_short(self):
     return self.dtype.name
@@ -96,10 +94,7 @@ class UnshapedArray(core.AbstractValue):
 _DIMENSION_TYPES = {int}
 
 def _canonicalize_dimension(dim):
-  if type(dim) in _DIMENSION_TYPES:
-    return dim
-  else:
-    return operator.index(dim)
+  return dim if type(dim) in _DIMENSION_TYPES else operator.index(dim)
 
 def canonicalize_shape(shape):
   """Canonicalizes and checks for errors in a user-provided shape value.
@@ -161,7 +156,7 @@ class ShapedArray(UnshapedArray):
 
   def str_short(self):
     shapestr = ','.join(map(str, self.shape))
-    return '{}[{}]'.format(self.dtype.name, shapestr)
+    return f'{self.dtype.name}[{shapestr}]'
 
   def __len__(self):
     try:

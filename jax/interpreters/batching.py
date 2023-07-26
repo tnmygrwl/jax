@@ -73,23 +73,18 @@ class BatchTracer(Tracer):
   @property
   def aval(self):
     aval = raise_to_shaped(core.get_aval(self.val))
-    if self.batch_dim is not_mapped:
+    if (self.batch_dim is not not_mapped and aval is core.abstract_unit
+        or self.batch_dim is not_mapped):
       return aval
+    elif type(aval) is ShapedArray:
+      assert 0 <= self.batch_dim < aval.ndim
+      new_shape = tuple(onp.delete(aval.shape, self.batch_dim))
+      return ShapedArray(new_shape, aval.dtype)
     else:
-      if aval is core.abstract_unit:
-        return aval
-      elif type(aval) is ShapedArray:
-        assert 0 <= self.batch_dim < aval.ndim
-        new_shape = tuple(onp.delete(aval.shape, self.batch_dim))
-        return ShapedArray(new_shape, aval.dtype)
-      else:
-        raise TypeError(aval)
+      raise TypeError(aval)
 
   def full_lower(self):
-    if self.batch_dim is not_mapped:
-      return core.full_lower(self.val)
-    else:
-      return self
+    return core.full_lower(self.val) if self.batch_dim is not_mapped else self
 
 class BatchTrace(Trace):
   def pure(self, val):
@@ -105,14 +100,11 @@ class BatchTrace(Trace):
     vals_in, dims_in = unzip2((t.val, t.batch_dim) for t in tracers)
     if all(bdim is not_mapped for bdim in dims_in):
       return primitive.bind(*vals_in, **params)
-    else:
-      # TODO(mattjj,phawkins): if no rule implemented, could vmap-via-map here
-      batched_primitive = get_primitive_batcher(primitive)
-      val_out, dim_out = batched_primitive(vals_in, dims_in, **params)
-      if primitive.multiple_results:
-        return map(partial(BatchTracer, self), val_out, dim_out)
-      else:
-        return BatchTracer(self, val_out, dim_out)
+    # TODO(mattjj,phawkins): if no rule implemented, could vmap-via-map here
+    batched_primitive = get_primitive_batcher(primitive)
+    val_out, dim_out = batched_primitive(vals_in, dims_in, **params)
+    return (map(partial(BatchTracer, self), val_out, dim_out) if
+            primitive.multiple_results else BatchTracer(self, val_out, dim_out))
 
   def process_call(self, call_primitive, f, tracers, params):
     assert call_primitive.multiple_results
@@ -123,25 +115,23 @@ class BatchTrace(Trace):
     vals, dims = unzip2((t.val, t.batch_dim) for t in tracers)
     if all(bdim is not_mapped for bdim in dims):
       return call_primitive.bind(f, *vals, **params)
-    else:
-      f, dims_out = batch_subtrace(f, self.master, dims)
-      vals_out = call_primitive.bind(f, *vals, **params)
-      return [BatchTracer(self, v, d) for v, d in zip(vals_out, dims_out())]
+    f, dims_out = batch_subtrace(f, self.master, dims)
+    vals_out = call_primitive.bind(f, *vals, **params)
+    return [BatchTracer(self, v, d) for v, d in zip(vals_out, dims_out())]
 
   def process_map(self, map_primitive, f, tracers, params):
     vals, dims = unzip2((t.val, t.batch_dim) for t in tracers)
     if all(dim is not_mapped for dim in dims):
       return map_primitive.bind(f, *vals, **params)
-    else:
-      size, = {x.shape[d] for x, d in zip(vals, dims) if d is not not_mapped}
-      is_batched = tuple(d is not not_mapped for d in dims)
-      vals = [moveaxis(x, d, 1) if d is not not_mapped and d != 1 else x
-              for x, d in zip(vals, dims)]
-      dims = tuple(not_mapped if d is not_mapped else 0 for d in dims)
-      f, dims_out = batch_subtrace(f, self.master, dims)
-      vals_out = map_primitive.bind(f, *vals, **params)
-      dims_out = tuple(d + 1 if d is not not_mapped else d for d in dims_out())
-      return [BatchTracer(self, v, d) for v, d in zip(vals_out, dims_out)]
+    size, = {x.shape[d] for x, d in zip(vals, dims) if d is not not_mapped}
+    is_batched = tuple(d is not not_mapped for d in dims)
+    vals = [moveaxis(x, d, 1) if d is not not_mapped and d != 1 else x
+            for x, d in zip(vals, dims)]
+    dims = tuple(not_mapped if d is not_mapped else 0 for d in dims)
+    f, dims_out = batch_subtrace(f, self.master, dims)
+    vals_out = map_primitive.bind(f, *vals, **params)
+    dims_out = tuple(d + 1 if d is not not_mapped else d for d in dims_out())
+    return [BatchTracer(self, v, d) for v, d in zip(vals_out, dims_out)]
 
   def post_process_call(self, call_primitive, out_tracers, params):
     vals, dims = unzip2((t.val, t.batch_dim) for t in out_tracers)
@@ -210,7 +200,7 @@ def reducer_batcher(prim, batched_args, batch_dims, axes, **params):
   operand, = batched_args
   bdim, = batch_dims
   axes = tuple(onp.where(onp.less(axes, bdim), axes, onp.add(axes, 1)))
-  bdim_out = int(list(onp.delete(onp.arange(operand.ndim), axes)).index(bdim))
+  bdim_out = list(onp.delete(onp.arange(operand.ndim), axes)).index(bdim)
   if 'input_shape' in params:
     params = dict(params, input_shape=operand.shape)
   return prim.bind(operand, axes=axes, **params), bdim_out
@@ -262,9 +252,8 @@ def broadcast(x, sz, axis):
   shape.insert(axis, sz)
   if isinstance(x, onp.ndarray) or onp.isscalar(x):
     return onp.broadcast_to(dtypes.coerce_to_array(x), shape)
-  else:
-    broadcast_dims = tuple(onp.delete(onp.arange(len(shape)), axis))
-    return x.broadcast_in_dim(shape, broadcast_dims)
+  broadcast_dims = tuple(onp.delete(onp.arange(len(shape)), axis))
+  return x.broadcast_in_dim(shape, broadcast_dims)
 
 def moveaxis(x, src, dst):
   if core.get_aval(x) is core.abstract_unit:
@@ -293,10 +282,7 @@ def matchaxis(sz, src, dst, x):
 def bdim_at_front(x, bdim, size):
   if core.get_aval(x) is core.abstract_unit:
     return core.unit
-  if bdim is not_mapped:
-    return broadcast(x, size, 0)
-  else:
-    return moveaxis(x, bdim, 0)
+  return broadcast(x, size, 0) if bdim is not_mapped else moveaxis(x, bdim, 0)
 
 
 def _promote_aval_rank(sz, aval):

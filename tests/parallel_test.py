@@ -87,20 +87,6 @@ class PapplyTest(jtu.JaxTestCase):
   def testLogSoftmax(self):
     raise SkipTest("test doesn't pass yet")  # TODO(frostig)
 
-    def fun(x):
-      return x - np.log(np.sum(np.exp(x)))
-
-    pfun, axis_name = _papply(fun)
-
-    jaxpr = make_jaxpr(pfun)(onp.zeros(5))
-    expected_jaxpr = make_jaxpr(
-        lambda x: x - np.log(lax.psum(np.exp(x), axis_name)))(onp.zeros(5))
-    assert repr(jaxpr) == repr(expected_jaxpr)
-
-    ans = soft_pmap(pfun, axis_name)(onp.arange(1., 5.))
-    expected = fun(onp.arange(1., 5.))
-    self.assertAllClose(ans, expected, check_dtypes=False)
-
   def testAdd(self):
     x = onp.array([[1, 2, 3], [4, 5, 6]])
     expected = x + x
@@ -112,22 +98,9 @@ class PapplyTest(jtu.JaxTestCase):
   def testAddBroadcasting(self):
     raise SkipTest("test doesn't pass yet")  # TODO(frostig)
 
-    def fun(x):
-      return x + 3
-
-    x = onp.array([[1, 2], [3, 4]])
-    expected = x + 3
-
-    pfun, axis_name = _papply(fun)
-    ans = soft_pmap(pfun, axis_name)(x)
-    self.assertAllClose(ans, expected, check_dtypes=True)
-
   def testMakeJaxprPapplyComposition(self):
     raise SkipTest(             # TODO(mattjj)
         "fails because select's papply rule calls an SPMD primitive")
-    x = b = onp.ones(3)
-    pfun, axis_name = _papply(lambda a: np.where(x, a, b))
-    make_jaxpr(pfun)(onp.ones(3))  # doesn't crash
 
 
 class ParallelizeTest(jtu.JaxTestCase):
@@ -250,16 +223,6 @@ class ParallelizeTest(jtu.JaxTestCase):
 
   def testDot(self):
     raise SkipTest("known failure")  # TODO(frostig)
-    x = onp.reshape(onp.arange(4., dtype=onp.float32), (2, 2))
-
-    def fun(x, y):
-      return lax.dot(x, y)
-
-    expected = fun(x, x)
-    pfun, axis_name = _papply(fun)
-    ans = soft_pmap(pfun, axis_name)(x, x)
-    ans = self.dedup(ans, expected.ndim)
-    self.assertAllClose(ans, expected, check_dtypes=False)
 
   # Test lax.dot_general on two rank-3 arguments, generating a test method call
   # for every matching of dimensions, and each matched pair of dimensions being

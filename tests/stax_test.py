@@ -47,105 +47,49 @@ def _CheckShapeAgreement(test_case, init_fun, apply_fun, input_shape):
 
 class StaxTest(jtu.JaxTestCase):
 
-  @parameterized.named_parameters(jtu.cases_from_list(
-      {"testcase_name": "_shape={}".format(shape), "shape": shape}
-      for shape in [(2, 3), (5,)]))
+  @parameterized.named_parameters(jtu.cases_from_list({"testcase_name": f"_shape={shape}", "shape": shape} for shape in [(2, 3), (5,)]))
   def testRandnInitShape(self, shape):
     key = random.PRNGKey(0)
     out = stax.randn()(key, shape)
     self.assertEqual(out.shape, shape)
 
-  @parameterized.named_parameters(jtu.cases_from_list(
-      {"testcase_name": "_shape={}".format(shape), "shape": shape}
-      for shape in [(2, 3), (2, 3, 4)]))
+  @parameterized.named_parameters(jtu.cases_from_list({"testcase_name": f"_shape={shape}", "shape": shape} for shape in [(2, 3), (2, 3, 4)]))
   def testGlorotInitShape(self, shape):
     key = random.PRNGKey(0)
     out = stax.glorot()(key, shape)
     self.assertEqual(out.shape, shape)
 
-  @parameterized.named_parameters(jtu.cases_from_list(
-      {"testcase_name":
-       "_channels={}_filter_shape={}_padding={}_strides={}_input_shape={}"
-       .format(channels, filter_shape, padding, strides, input_shape),
-       "channels": channels, "filter_shape": filter_shape, "padding": padding,
-       "strides": strides, "input_shape": input_shape}
-      for channels in [2, 3]
-      for filter_shape in [(1, 1), (2, 3)]
-      for padding in ["SAME", "VALID"]
-      for strides in [None, (2, 1)]
-      for input_shape in [(2, 10, 11, 1)]))
+  @parameterized.named_parameters(jtu.cases_from_list({"testcase_name": f"_channels={channels}_filter_shape={filter_shape}_padding={padding}_strides={strides}_input_shape={input_shape}", "channels": channels, "filter_shape": filter_shape, "padding": padding, "strides": strides, "input_shape": input_shape} for channels in [2, 3] for filter_shape in [(1, 1), (2, 3)] for padding in ["SAME", "VALID"] for strides in [None, (2, 1)] for input_shape in [(2, 10, 11, 1)]))
   def testConvShape(self, channels, filter_shape, padding, strides,
                     input_shape):
     init_fun, apply_fun = stax.Conv(channels, filter_shape, strides=strides,
                                     padding=padding)
     _CheckShapeAgreement(self, init_fun, apply_fun, input_shape)
 
-  @parameterized.named_parameters(jtu.cases_from_list(
-      {"testcase_name":
-       "_channels={}_filter_shape={}_padding={}_strides={}_input_shape={}"
-       .format(channels, filter_shape, padding, strides, input_shape),
-       "channels": channels, "filter_shape": filter_shape, "padding": padding,
-       "strides": strides, "input_shape": input_shape}
-      for channels in [2, 3]
-      for filter_shape in [(1, 1), (2, 3), (3, 3)]
-      for padding in ["SAME", "VALID"]
-      for strides in [None, (2, 1), (2, 2)]
-      for input_shape in [(2, 10, 11, 1)]))
+  @parameterized.named_parameters(jtu.cases_from_list({"testcase_name": f"_channels={channels}_filter_shape={filter_shape}_padding={padding}_strides={strides}_input_shape={input_shape}", "channels": channels, "filter_shape": filter_shape, "padding": padding, "strides": strides, "input_shape": input_shape} for channels in [2, 3] for filter_shape in [(1, 1), (2, 3), (3, 3)] for padding in ["SAME", "VALID"] for strides in [None, (2, 1), (2, 2)] for input_shape in [(2, 10, 11, 1)]))
   def testConvTransposeShape(self, channels, filter_shape, padding, strides,
                                input_shape):
     init_fun, apply_fun = stax.ConvTranspose(channels, filter_shape,  # 2D
                                                strides=strides, padding=padding)
     _CheckShapeAgreement(self, init_fun, apply_fun, input_shape)
-  @parameterized.named_parameters(jtu.cases_from_list(
-      {"testcase_name":
-       "_channels={}_filter_shape={}_padding={}_strides={}_input_shape={}"
-       .format(channels, filter_shape, padding, strides, input_shape),
-       "channels": channels, "filter_shape": filter_shape, "padding": padding,
-       "strides": strides, "input_shape": input_shape}
-      for channels in [2, 3]
-      for filter_shape in [(1,), (2,), (3,)]
-      for padding in ["SAME", "VALID"]
-      for strides in [None, (1,), (2,)]
-      for input_shape in [(2, 10, 1)]))
+  @parameterized.named_parameters(jtu.cases_from_list({"testcase_name": f"_channels={channels}_filter_shape={filter_shape}_padding={padding}_strides={strides}_input_shape={input_shape}", "channels": channels, "filter_shape": filter_shape, "padding": padding, "strides": strides, "input_shape": input_shape} for channels in [2, 3] for filter_shape in [(1,), (2,), (3,)] for padding in ["SAME", "VALID"] for strides in [None, (1,), (2,)] for input_shape in [(2, 10, 1)]))
   def testConv1DTransposeShape(self, channels, filter_shape, padding, strides,
                                input_shape):
     init_fun, apply_fun = stax.Conv1DTranspose(channels, filter_shape,
                                                strides=strides, padding=padding)
     _CheckShapeAgreement(self, init_fun, apply_fun, input_shape)
 
-  @parameterized.named_parameters(jtu.cases_from_list(
-      {"testcase_name": "_out_dim={}_input_shape={}"
-                        .format(out_dim, input_shape),
-       "out_dim": out_dim, "input_shape": input_shape}
-      for out_dim in [3, 4]
-      for input_shape in [(2, 3), (3, 4)]))
+  @parameterized.named_parameters(jtu.cases_from_list({"testcase_name": f"_out_dim={out_dim}_input_shape={input_shape}", "out_dim": out_dim, "input_shape": input_shape} for out_dim in [3, 4] for input_shape in [(2, 3), (3, 4)]))
   def testDenseShape(self, out_dim, input_shape):
     init_fun, apply_fun = stax.Dense(out_dim)
     _CheckShapeAgreement(self, init_fun, apply_fun, input_shape)
 
-  @parameterized.named_parameters(jtu.cases_from_list(
-      {"testcase_name": "_input_shape={}_nonlinear={}"
-                        .format(input_shape, nonlinear),
-       "input_shape": input_shape, "nonlinear": nonlinear}
-      for input_shape in [(2, 3), (2, 3, 4)]
-      for nonlinear in ["Relu", "Sigmoid", "Elu", "LeakyRelu"]))
+  @parameterized.named_parameters(jtu.cases_from_list({"testcase_name": f"_input_shape={input_shape}_nonlinear={nonlinear}", "input_shape": input_shape, "nonlinear": nonlinear} for input_shape in [(2, 3), (2, 3, 4)] for nonlinear in ["Relu", "Sigmoid", "Elu", "LeakyRelu"]))
   def testNonlinearShape(self, input_shape, nonlinear):
     init_fun, apply_fun = getattr(stax, nonlinear)
     _CheckShapeAgreement(self, init_fun, apply_fun, input_shape)
 
-  @parameterized.named_parameters(jtu.cases_from_list(
-      {"testcase_name": "_window_shape={}_padding={}_strides={}_input_shape={}"
-                        "_maxpool={}_spec={}"
-                        .format(window_shape, padding, strides, input_shape,
-                                max_pool, spec),
-       "window_shape": window_shape, "padding": padding, "strides": strides,
-       "input_shape": input_shape, "max_pool": max_pool, "spec": spec}
-      for window_shape in [(1, 1), (2, 3)]
-      for padding in ["VALID"]
-      for strides in [None, (2, 1)]
-      for input_shape in [(2, 5, 6, 4)]
-      for max_pool in [False, True]
-      for spec in ["NHWC", "NCHW", "WHNC", "WHCN"]))
+  @parameterized.named_parameters(jtu.cases_from_list({"testcase_name": f"_window_shape={window_shape}_padding={padding}_strides={strides}_input_shape={input_shape}_maxpool={max_pool}_spec={spec}", "window_shape": window_shape, "padding": padding, "strides": strides, "input_shape": input_shape, "max_pool": max_pool, "spec": spec} for window_shape in [(1, 1), (2, 3)] for padding in ["VALID"] for strides in [None, (2, 1)] for input_shape in [(2, 5, 6, 4)] for max_pool in [False, True] for spec in ["NHWC", "NCHW", "WHNC", "WHCN"]))
   def testPoolingShape(self, window_shape, padding, strides, input_shape,
                        max_pool, spec):
     layer = stax.MaxPool if max_pool else stax.AvgPool
@@ -153,45 +97,29 @@ class StaxTest(jtu.JaxTestCase):
                                 spec=spec)
     _CheckShapeAgreement(self, init_fun, apply_fun, input_shape)
 
-  @parameterized.named_parameters(jtu.cases_from_list(
-      {"testcase_name": "_shape={}".format(input_shape),
-       "input_shape": input_shape}
-      for input_shape in [(2, 3), (2, 3, 4)]))
+  @parameterized.named_parameters(jtu.cases_from_list({"testcase_name": f"_shape={input_shape}", "input_shape": input_shape} for input_shape in [(2, 3), (2, 3, 4)]))
   def testFlattenShape(self, input_shape):
     init_fun, apply_fun = stax.Flatten
     _CheckShapeAgreement(self, init_fun, apply_fun, input_shape)
 
-  @parameterized.named_parameters(jtu.cases_from_list(
-      {"testcase_name": "_input_shape={}_spec={}".format(input_shape, i),
-       "input_shape": input_shape, "spec": spec}
-      for input_shape in [(2, 5, 6, 1)]
-      for i, spec in enumerate([
+  @parameterized.named_parameters(jtu.cases_from_list({"testcase_name": f"_input_shape={input_shape}_spec={i}", "input_shape": input_shape, "spec": spec} for input_shape in [(2, 5, 6, 1)] for i, spec in enumerate([
           [stax.Conv(3, (2, 2))],
           [stax.Conv(3, (2, 2)), stax.Flatten, stax.Dense(4)]])))
   def testSerialComposeLayersShape(self, input_shape, spec):
     init_fun, apply_fun = stax.serial(*spec)
     _CheckShapeAgreement(self, init_fun, apply_fun, input_shape)
 
-  @parameterized.named_parameters(jtu.cases_from_list(
-      {"testcase_name": "_input_shape={}".format(input_shape),
-       "input_shape": input_shape}
-      for input_shape in [(3, 4), (2, 5, 6, 1)]))
+  @parameterized.named_parameters(jtu.cases_from_list({"testcase_name": f"_input_shape={input_shape}", "input_shape": input_shape} for input_shape in [(3, 4), (2, 5, 6, 1)]))
   def testDropoutShape(self, input_shape):
     init_fun, apply_fun = stax.Dropout(0.9)
     _CheckShapeAgreement(self, init_fun, apply_fun, input_shape)
 
-  @parameterized.named_parameters(jtu.cases_from_list(
-      {"testcase_name": "_input_shape={}".format(input_shape),
-       "input_shape": input_shape}
-      for input_shape in [(3, 4), (2, 5, 6, 1)]))
+  @parameterized.named_parameters(jtu.cases_from_list({"testcase_name": f"_input_shape={input_shape}", "input_shape": input_shape} for input_shape in [(3, 4), (2, 5, 6, 1)]))
   def testFanInSum(self, input_shape):
     init_fun, apply_fun = stax.FanInSum
     _CheckShapeAgreement(self, init_fun, apply_fun, [input_shape, input_shape])
 
-  @parameterized.named_parameters(jtu.cases_from_list(
-      {"testcase_name": "_inshapes={}_axis={}".format(input_shapes, axis),
-       "input_shapes": input_shapes, "axis": axis}
-      for input_shapes, axis in [
+  @parameterized.named_parameters(jtu.cases_from_list({"testcase_name": f"_inshapes={input_shapes}_axis={axis}", "input_shapes": input_shapes, "axis": axis} for input_shapes, axis in [
           ([(2, 3), (2, 1)], 1),
           ([(2, 3), (2, 1)], -1),
           ([(1, 2, 4), (1, 1, 4)], 1),

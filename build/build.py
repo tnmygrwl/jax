@@ -110,10 +110,8 @@ def download_and_verify_bazel():
     tmp_path, _ = urlretrieve(uri, None, progress)
     sys.stdout.write("\n")
 
-    # Verify that the downloaded Bazel binary has the expected SHA256.
-    downloaded_file = open(tmp_path, "rb")
-    contents = downloaded_file.read()
-    downloaded_file.close()
+    with open(tmp_path, "rb") as downloaded_file:
+      contents = downloaded_file.read()
     digest = hashlib.sha256(contents).hexdigest()
     if digest != package.sha256:
       print(
@@ -121,17 +119,14 @@ def download_and_verify_bazel():
           .format(package.sha256, digest))
       sys.exit(-1)
 
-    # Write the file as the bazel file name.
-    out_file = open(package.file, "wb")
-    out_file.write(contents)
-    out_file.close()
-
+    with open(package.file, "wb") as out_file:
+      out_file.write(contents)
     # Mark the file as executable.
     st = os.stat(package.file)
     os.chmod(package.file,
              st.st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
-  return "./" + package.file
+  return f"./{package.file}"
 
 
 def get_bazel_path(bazel_path_flag):
@@ -139,12 +134,10 @@ def get_bazel_path(bazel_path_flag):
   if bazel_path_flag:
     return bazel_path_flag
 
-  bazel = download_and_verify_bazel()
-  if bazel:
+  if bazel := download_and_verify_bazel():
     return bazel
 
-  bazel = which("bazel")
-  if bazel:
+  if bazel := which("bazel"):
     return bazel
 
   print("Cannot find or download bazel. Please install bazel.")
@@ -156,21 +149,22 @@ def check_bazel_version(bazel_path, min_version, max_version):
   version_output = shell([bazel_path, "--bazelrc=/dev/null", "version"])
   match = re.search("Build label: *([0-9\\.]+)[^0-9\\.]", version_output)
   if match is None:
-    print("Warning: bazel installation is not a release version. Make sure "
-          "bazel is at least {}".format(min_version))
+    print(
+        f"Warning: bazel installation is not a release version. Make sure bazel is at least {min_version}"
+    )
     return
-  version = match.group(1)
+  version = match[1]
   min_ints = [int(x) for x in min_version.split(".")]
-  actual_ints = [int(x) for x in match.group(1).split(".")]
+  actual_ints = [int(x) for x in match[1].split(".")]
   if min_ints > actual_ints:
-    print("Outdated bazel revision (>= {} required, found {})".format(
-        min_version, version))
+    print(f"Outdated bazel revision (>= {min_version} required, found {version})")
     sys.exit(-1)
   if max_version is not None:
     max_ints = [int(x) for x in max_version.split(".")]
     if actual_ints >= max_ints:
-      print("Please downgrade your bazel revision to build JAX (>= {} and < {}"
-            " required, found {})".format(min_version, max_version, version))
+      print(
+          f"Please downgrade your bazel revision to build JAX (>= {min_version} and < {max_version} required, found {version})"
+      )
       sys.exit(-1)
 
 
@@ -219,15 +213,14 @@ build:short_logs --output_filter=DONT_MATCH_ANYTHING
 
 
 def write_bazelrc(cuda_toolkit_path=None, cudnn_install_path=None, **kwargs):
-  f = open("../.bazelrc", "w")
-  f.write(BAZELRC_TEMPLATE.format(**kwargs))
-  if cuda_toolkit_path:
-    f.write("build --action_env CUDA_TOOLKIT_PATH=\"{cuda_toolkit_path}\"\n"
-            .format(cuda_toolkit_path=cuda_toolkit_path))
-  if cudnn_install_path:
-    f.write("build --action_env CUDNN_INSTALL_PATH=\"{cudnn_install_path}\"\n"
-            .format(cudnn_install_path=cudnn_install_path))
-  f.close()
+  with open("../.bazelrc", "w") as f:
+    f.write(BAZELRC_TEMPLATE.format(**kwargs))
+    if cuda_toolkit_path:
+      f.write("build --action_env CUDA_TOOLKIT_PATH=\"{cuda_toolkit_path}\"\n"
+              .format(cuda_toolkit_path=cuda_toolkit_path))
+    if cudnn_install_path:
+      f.write("build --action_env CUDNN_INSTALL_PATH=\"{cudnn_install_path}\"\n"
+              .format(cudnn_install_path=cudnn_install_path))
 
 
 BANNER = r"""
@@ -257,20 +250,21 @@ def _parse_string_as_bool(s):
   elif lower == "false":
     return False
   else:
-    raise ValueError("Expected either 'true' or 'false'; got {}".format(s))
+    raise ValueError(f"Expected either 'true' or 'false'; got {s}")
 
 
 def add_boolean_argument(parser, name, default=False, help_str=None):
   """Creates a boolean flag."""
   group = parser.add_mutually_exclusive_group()
   group.add_argument(
-      "--" + name,
+      f"--{name}",
       nargs="?",
       default=default,
       const=True,
       type=_parse_string_as_bool,
-      help=help_str)
-  group.add_argument("--no" + name, dest=name, action="store_false")
+      help=help_str,
+  )
+  group.add_argument(f"--no{name}", dest=name, action="store_false")
 
 
 def main():
@@ -325,25 +319,25 @@ def main():
   # Find a working Bazel.
   bazel_path = get_bazel_path(args.bazel_path)
   check_bazel_version(bazel_path, min_version="2.0.0", max_version=None)
-  print("Bazel binary path: {}".format(bazel_path))
+  print(f"Bazel binary path: {bazel_path}")
 
   python_bin_path = get_python_bin_path(args.python_bin_path)
-  print("Python binary path: {}".format(python_bin_path))
+  print(f"Python binary path: {python_bin_path}")
   python_version = get_python_version(python_bin_path)
-  print("Python version: {}".format(".".join(map(str, python_version))))
+  print(f'Python version: {".".join(map(str, python_version))}')
   check_python_version(python_version)
 
-  print("MKL-DNN enabled: {}".format("yes" if args.enable_mkl_dnn else "no"))
-  print("-march=native: {}".format("yes" if args.enable_march_native else "no"))
+  print(f'MKL-DNN enabled: {"yes" if args.enable_mkl_dnn else "no"}')
+  print(f'-march=native: {"yes" if args.enable_march_native else "no"}')
 
   cuda_toolkit_path = args.cuda_path
   cudnn_install_path = args.cudnn_path
-  print("CUDA enabled: {}".format("yes" if args.enable_cuda else "no"))
+  print(f'CUDA enabled: {"yes" if args.enable_cuda else "no"}')
   if args.enable_cuda:
     if cuda_toolkit_path:
-      print("CUDA toolkit path: {}".format(cuda_toolkit_path))
+      print(f"CUDA toolkit path: {cuda_toolkit_path}")
     if cudnn_install_path:
-      print("CUDNN library path: {}".format(cudnn_install_path))
+      print(f"CUDNN library path: {cudnn_install_path}")
   write_bazelrc(
       python_bin_path=python_bin_path,
       tf_need_cuda=1 if args.enable_cuda else 0,

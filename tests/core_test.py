@@ -125,12 +125,13 @@ def jvp_unlinearized(f, primals, tangents):
 
 test_specs = []
 for ts in test_specs_base:
-  test_specs.append(ts)
-  test_specs.append(CallSpec(partial(jvp, ts.fun), (ts.args, ts.args)))
-  test_specs.append(CallSpec(jit(ts.fun), ts.args))
-  test_specs.append(CallSpec(jit(jit(ts.fun)), ts.args))
-  test_specs.append(CallSpec(partial(jvp_unlinearized, ts.fun),
-                             (ts.args, ts.args)))
+  test_specs.extend((
+      ts,
+      CallSpec(partial(jvp, ts.fun), (ts.args, ts.args)),
+      CallSpec(jit(ts.fun), ts.args),
+      CallSpec(jit(jit(ts.fun)), ts.args),
+      CallSpec(partial(jvp_unlinearized, ts.fun), (ts.args, ts.args)),
+  ))
 
 
 def fwd_deriv(f):
@@ -213,10 +214,7 @@ class CoreTest(jtu.JaxTestCase):
 
   def test_simple_jit(self):
     def foo(x):
-      if x.shape == ():
-        return x + 1.
-      else:
-        return x + 2.
+      return x + 1. if x.shape == () else x + 2.
 
     foo2 = jit(foo)
     foo3 = jit(foo2)

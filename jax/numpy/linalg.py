@@ -40,13 +40,11 @@ def _promote_arg_dtypes(*args):
   """Promotes `args` to a common inexact type."""
   def _to_inexact_type(type):
     return type if np.issubdtype(type, np.inexact) else np.float_
+
   inexact_types = [_to_inexact_type(np._dtype(arg)) for arg in args]
   dtype = dtypes.canonicalize_dtype(np.result_type(*inexact_types))
   args = [lax.convert_element_type(arg, dtype) for arg in args]
-  if len(args) == 1:
-    return args[0]
-  else:
-    return args
+  return args[0] if len(args) == 1 else args
 
 
 @_wraps(onp.linalg.cholesky)
@@ -66,14 +64,15 @@ def matrix_power(a, n):
   a = _promote_arg_dtypes(np.asarray(a))
 
   if a.ndim < 2:
-    raise TypeError("{}-dimensional array given. Array must be at least "
-                    "two-dimensional".format(a.ndim))
+    raise TypeError(
+        f"{a.ndim}-dimensional array given. Array must be at least two-dimensional"
+    )
   if a.shape[-2] != a.shape[-1]:
     raise TypeError("Last 2 dimensions of the array must be square")
   try:
     n = operator.index(n)
   except TypeError:
-    raise TypeError("exponent must be an integer, got {}".format(n))
+    raise TypeError(f"exponent must be an integer, got {n}")
 
   if n == 0:
     return np.broadcast_to(np.eye(a.shape[-2], dtype=a.dtype), a.shape)
@@ -173,7 +172,7 @@ def eigh(a, UPLO=None, symmetrize_input=True):
   elif UPLO == "U":
     lower = False
   else:
-    msg = "UPLO must be one of None, 'L', or 'U', got {}".format(UPLO)
+    msg = f"UPLO must be one of None, 'L', or 'U', got {UPLO}"
     raise ValueError(msg)
 
   a = _promote_arg_dtypes(np.asarray(a))
@@ -216,8 +215,8 @@ def pinv(a, rcond=None):
 @_wraps(onp.linalg.inv)
 def inv(a):
   if np.ndim(a) < 2 or a.shape[-1] != a.shape[-2]:
-    raise ValueError("Argument to inv must have shape [..., n, n], got {}."
-      .format(np.shape(a)))
+    raise ValueError(
+        f"Argument to inv must have shape [..., n, n], got {np.shape(a)}.")
   return solve(
     a, lax.broadcast(np.eye(a.shape[-1], dtype=lax.dtype(a)), a.shape[:-2]))
 
@@ -290,10 +289,10 @@ def _norm(x, ord, axis: Union[None, Tuple[int, ...], int], keepdims):
                      axis=row_axis, keepdims=keepdims)
     elif ord in ('nuc', 2, -2):
       x = np.moveaxis(x, axis, (-2, -1))
-      if ord == 2:
-        reducer = np.amax
-      elif ord == -2:
+      if ord == -2:
         reducer = np.amin
+      elif ord == 2:
+        reducer = np.amax
       else:
         reducer = np.sum
       y = reducer(svd(x, compute_uv=False), axis=-1)
@@ -304,10 +303,9 @@ def _norm(x, ord, axis: Union[None, Tuple[int, ...], int], keepdims):
         y = np.reshape(y, result_shape)
       return y
     else:
-      raise ValueError("Invalid order '{}' for matrix norm.".format(ord))
+      raise ValueError(f"Invalid order '{ord}' for matrix norm.")
   else:
-    raise ValueError(
-        "Invalid axis values ({}) for np.linalg.norm.".format(axis))
+    raise ValueError(f"Invalid axis values ({axis}) for np.linalg.norm.")
 
 @_wraps(onp.linalg.norm)
 def norm(x, ord=None, axis=None, keepdims=False):
@@ -321,16 +319,14 @@ def qr(a, mode="reduced"):
   elif mode == "complete":
     full_matrices = True
   else:
-    raise ValueError("Unsupported QR decomposition mode '{}'".format(mode))
+    raise ValueError(f"Unsupported QR decomposition mode '{mode}'")
   a = _promote_arg_dtypes(np.asarray(a))
   q, r = lax_linalg.qr(a, full_matrices)
-  if mode == "r":
-    return r
-  return q, r
+  return r if mode == "r" else (q, r)
 
 
 def _check_solve_shapes(a, b):
-  if not (a.ndim >= 2 and a.shape[-1] == a.shape[-2] and b.ndim >= 1):
+  if a.ndim < 2 or a.shape[-1] != a.shape[-2] or b.ndim < 1:
     msg = ("The arguments to solve must have shapes a=[..., m, m] and "
            "b=[..., m, k] or b=[..., m]; got a={} and b={}")
     raise ValueError(msg.format(a.shape, b.shape))

@@ -55,9 +55,11 @@ def _fixed_ref_map_coordinates(input, coordinates, order, mode, cval=0.0):
   else:
     padded = onp.pad(input, padding, mode=pad_mode)
   dtype = onp.result_type(padded, *shifted_coords)
-  result = osp_ndimage.map_coordinates(
-      padded, shifted_coords, order=order, mode=mode, cval=cval)
-  return result
+  return osp_ndimage.map_coordinates(padded,
+                                     shifted_coords,
+                                     order=order,
+                                     mode=mode,
+                                     cval=cval)
 
 
 class NdimageTest(jtu.JaxTestCase):
@@ -99,8 +101,9 @@ class NdimageTest(jtu.JaxTestCase):
     impl_fun = (osp_ndimage.map_coordinates if impl == "original"
                 else _fixed_ref_map_coordinates)
     osp_op = lambda x, c: impl_fun(x, c, order=order, mode=mode, cval=cval)
-    epsilon = max([dtypes.finfo(dtypes.canonicalize_dtype(d)).eps
-                   for d in [dtype, coords_dtype]])
+    epsilon = max(
+        dtypes.finfo(dtypes.canonicalize_dtype(d)).eps
+        for d in [dtype, coords_dtype])
     self._CheckAgainstNumpy(lsp_op, osp_op, args_maker, tol=10*epsilon,
                             check_dtypes=True)
 

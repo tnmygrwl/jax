@@ -172,10 +172,7 @@ def gen_sized_subset(xs, size):
   return [choice(xs) for _ in range(size)]
 
 def gen_subset(xs):
-  if not xs:
-    return []
-
-  return gen_sized_subset(xs, npr.randint(len(xs) + 1))
+  return [] if not xs else gen_sized_subset(xs, npr.randint(len(xs) + 1))
 
 def gen_vals(vs):
   return [gen_array_val(v.vartype) for v in vs]
@@ -205,8 +202,8 @@ def check_close(x, y, tol=1e-3):
   assert np.shape(x) == np.shape(y)
   # TODO(dougalm): re-enable once we've tackled the less pendantic bugs
   # assert x.dtype == y.dtype
-  assert np.allclose(x, y, rtol=tol, atol=tol), \
-     "Value mismatch:\n{}\n  vs\n{}\n".format(x, y)
+  assert np.allclose(x, y, rtol=tol,
+                     atol=tol), f"Value mismatch:\n{x}\n  vs\n{y}\n"
 
 def partial_argnums(f, args, dyn_argnums):
   fixed_args = [None if i in dyn_argnums else arg for i, arg in enumerate(args)]

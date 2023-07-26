@@ -340,7 +340,7 @@ class BatchingTest(jtu.JaxTestCase):
     # test modeling the code in https://github.com/google/jax/issues/54
 
     def func(xs):
-      return np.array([x for x in xs])
+      return np.array(list(xs))
 
     xs = np.ones((5, 1))
     jacrev(func)(xs)  # don't crash
@@ -652,15 +652,7 @@ class BatchingTest(jtu.JaxTestCase):
       [lax_linalg.triangular_solve(a[:, i], b[..., 0]) for i in range(10)])
     self.assertAllClose(ans, expected, check_dtypes=True)
 
-  @parameterized.named_parameters(
-      {"testcase_name": "_shape={}_axis={}_idxs={}_dnums={}_slice_sizes={}".format(
-          jtu.format_shape_dtype_string(shape, dtype), axis, idxs, dnums,
-          slice_sizes),
-       "axis": axis, "shape": shape, "dtype": dtype, "idxs": idxs, "dnums": dnums,
-       "slice_sizes": slice_sizes, "rng_factory": rng_factory,
-       "rng_idx_factory": rng_idx_factory}
-      for dtype in [onp.float32, onp.int32]
-      for axis, shape, idxs, dnums, slice_sizes in [
+  @parameterized.named_parameters({"testcase_name": f"_shape={jtu.format_shape_dtype_string(shape, dtype)}_axis={axis}_idxs={idxs}_dnums={dnums}_slice_sizes={slice_sizes}", "axis": axis, "shape": shape, "dtype": dtype, "idxs": idxs, "dnums": dnums, "slice_sizes": slice_sizes, "rng_factory": rng_factory, "rng_idx_factory": rng_idx_factory} for dtype in [onp.float32, onp.int32] for axis, shape, idxs, dnums, slice_sizes in [
           (0, (3, 5), onp.array([[0], [2]]), lax.GatherDimensionNumbers(
             offset_dims=(), collapsed_slice_dims=(0,), start_index_map=(0,)),
             (1,)),
@@ -675,9 +667,7 @@ class BatchingTest(jtu.JaxTestCase):
              offset_dims=(1,), collapsed_slice_dims=(0,),
              start_index_map=(0, 1)),
             (1, 3)),
-      ]
-      for rng_idx_factory in [partial(jtu.rand_int, max(shape))]
-      for rng_factory in [jtu.rand_default])
+      ] for rng_idx_factory in [partial(jtu.rand_int, max(shape))] for rng_factory in [jtu.rand_default])
   def testGatherBatchedOperand(self, axis, shape, dtype, idxs, dnums,
                                slice_sizes, rng_factory, rng_idx_factory):
     rng = rng_factory()
@@ -689,15 +679,7 @@ class BatchingTest(jtu.JaxTestCase):
                           for i in range(operand.shape[axis])])
     self.assertAllClose(ans, expected, check_dtypes=False)
 
-  @parameterized.named_parameters(
-      {"testcase_name": "_shape={}_axis={}_idxs={}_dnums={}_slice_sizes={}".format(
-          jtu.format_shape_dtype_string(shape, dtype), axis, idxs, dnums,
-          slice_sizes),
-       "axis": axis, "shape": shape, "dtype": dtype, "idxs": idxs, "dnums": dnums,
-       "slice_sizes": slice_sizes, "rng_factory": rng_factory,
-       "rng_idx_factory": rng_idx_factory}
-      for dtype in [onp.float32, onp.float64]
-      for axis, shape, idxs, dnums, slice_sizes in [
+  @parameterized.named_parameters({"testcase_name": f"_shape={jtu.format_shape_dtype_string(shape, dtype)}_axis={axis}_idxs={idxs}_dnums={dnums}_slice_sizes={slice_sizes}", "axis": axis, "shape": shape, "dtype": dtype, "idxs": idxs, "dnums": dnums, "slice_sizes": slice_sizes, "rng_factory": rng_factory, "rng_idx_factory": rng_idx_factory} for dtype in [onp.float32, onp.float64] for axis, shape, idxs, dnums, slice_sizes in [
           (0, (3, 5), onp.array([[0], [2]]), lax.GatherDimensionNumbers(
             offset_dims=(), collapsed_slice_dims=(0,), start_index_map=(0,)),
             (1,)),
@@ -711,9 +693,7 @@ class BatchingTest(jtu.JaxTestCase):
            lax.GatherDimensionNumbers(
              offset_dims=(1,), collapsed_slice_dims=(0,),
              start_index_map=(0, 1)),
-            (1, 3)),      ]
-      for rng_idx_factory in [partial(jtu.rand_int, max(shape))]
-      for rng_factory in [jtu.rand_default])
+            (1, 3)),      ] for rng_idx_factory in [partial(jtu.rand_int, max(shape))] for rng_factory in [jtu.rand_default])
   def testGatherGradBatchedOperand(self, axis, shape, dtype, idxs, dnums,
                                    slice_sizes, rng_factory, rng_idx_factory):
     rng = rng_factory()
@@ -726,15 +706,7 @@ class BatchingTest(jtu.JaxTestCase):
                           for i in range(operand.shape[axis])])
     self.assertAllClose(ans, expected, check_dtypes=False)
 
-  @parameterized.named_parameters(
-      {"testcase_name": "_shape={}_axis={}_idxs={}_dnums={}_slice_sizes={}".format(
-          jtu.format_shape_dtype_string(shape, dtype), axis, idxs, dnums,
-          slice_sizes),
-       "axis": axis, "shape": shape, "dtype": dtype, "idxs": idxs, "dnums": dnums,
-       "slice_sizes": slice_sizes, "rng_factory": rng_factory,
-       "rng_idx_factory": rng_idx_factory}
-      for dtype in [onp.float32, onp.int32]
-      for axis, shape, idxs, dnums, slice_sizes in [
+  @parameterized.named_parameters({"testcase_name": f"_shape={jtu.format_shape_dtype_string(shape, dtype)}_axis={axis}_idxs={idxs}_dnums={dnums}_slice_sizes={slice_sizes}", "axis": axis, "shape": shape, "dtype": dtype, "idxs": idxs, "dnums": dnums, "slice_sizes": slice_sizes, "rng_factory": rng_factory, "rng_idx_factory": rng_idx_factory} for dtype in [onp.float32, onp.int32] for axis, shape, idxs, dnums, slice_sizes in [
           (0, (5,), onp.array([[[0], [2]], [[1], [3]]]), lax.GatherDimensionNumbers(
               offset_dims=(), collapsed_slice_dims=(0,), start_index_map=(0,)), (1,)),
           (1, (10,), onp.array([[0, 0, 0], [0, 2, 1]]).T[..., None],
@@ -746,9 +718,7 @@ class BatchingTest(jtu.JaxTestCase):
           (0, (10, 5), onp.array([[[0, 1], [2, 0]],
                                   [[1, 0], [2, 3]]]), lax.GatherDimensionNumbers(
             offset_dims=(1,), collapsed_slice_dims=(0,), start_index_map=(0, 1)), (1, 3)),
-      ]
-      for rng_idx_factory in [partial(jtu.rand_int, max(shape))]
-      for rng_factory in [jtu.rand_default])
+      ] for rng_idx_factory in [partial(jtu.rand_int, max(shape))] for rng_factory in [jtu.rand_default])
   def testGatherBatchedIndices(self, axis, shape, dtype, idxs, dnums,
                                slice_sizes, rng_factory, rng_idx_factory):
     rng = rng_factory()
@@ -760,15 +730,7 @@ class BatchingTest(jtu.JaxTestCase):
                           for i in range(idxs.shape[axis])])
     self.assertAllClose(ans, expected, check_dtypes=False)
 
-  @parameterized.named_parameters(
-      {"testcase_name": "_shape={}_axis={}_idxs={}_dnums={}_slice_sizes={}".format(
-          jtu.format_shape_dtype_string(shape, dtype), axis, idxs, dnums,
-          slice_sizes),
-       "axis": axis, "shape": shape, "dtype": dtype, "idxs": idxs, "dnums": dnums,
-       "slice_sizes": slice_sizes, "rng_factory": rng_factory,
-       "rng_idx_factory": rng_idx_factory}
-      for dtype in [onp.float32, onp.float64]
-      for axis, shape, idxs, dnums, slice_sizes in [
+  @parameterized.named_parameters({"testcase_name": f"_shape={jtu.format_shape_dtype_string(shape, dtype)}_axis={axis}_idxs={idxs}_dnums={dnums}_slice_sizes={slice_sizes}", "axis": axis, "shape": shape, "dtype": dtype, "idxs": idxs, "dnums": dnums, "slice_sizes": slice_sizes, "rng_factory": rng_factory, "rng_idx_factory": rng_idx_factory} for dtype in [onp.float32, onp.float64] for axis, shape, idxs, dnums, slice_sizes in [
           (0, (5,), onp.array([[[0], [2]], [[1], [3]]]), lax.GatherDimensionNumbers(
               offset_dims=(), collapsed_slice_dims=(0,), start_index_map=(0,)), (1,)),
           (1, (10,), onp.array([[0, 0, 0], [0, 2, 1]]).T[..., None],
@@ -780,9 +742,7 @@ class BatchingTest(jtu.JaxTestCase):
           (0, (10, 5), onp.array([[[0, 1], [2, 0]],
                                   [[1, 0], [2, 3]]]), lax.GatherDimensionNumbers(
             offset_dims=(1,), collapsed_slice_dims=(0,), start_index_map=(0, 1)), (1, 3)),
-      ]
-      for rng_idx_factory in [partial(jtu.rand_int, max(shape))]
-      for rng_factory in [jtu.rand_default])
+      ] for rng_idx_factory in [partial(jtu.rand_int, max(shape))] for rng_factory in [jtu.rand_default])
   def testGatherGradBatchedIndices(self, axis, shape, dtype, idxs, dnums,
                                    slice_sizes, rng_factory, rng_idx_factory):
     rng = rng_factory()
@@ -795,15 +755,7 @@ class BatchingTest(jtu.JaxTestCase):
                           for i in range(idxs.shape[axis])])
     self.assertAllClose(ans, expected, check_dtypes=False)
 
-  @parameterized.named_parameters(
-      {"testcase_name": "_shape={}_op_axis={}_idxs_axis={}_idxs={}_dnums={}_slice_sizes={}".format(
-          jtu.format_shape_dtype_string(shape, dtype), op_axis, idxs_axis, idxs,
-          dnums, slice_sizes),
-       "op_axis": op_axis, "idxs_axis": idxs_axis, "shape": shape, "dtype":
-       dtype, "idxs": idxs, "dnums": dnums, "slice_sizes": slice_sizes,
-       "rng_factory": rng_factory, "rng_idx_factory": rng_idx_factory}
-      for dtype in [onp.float32, onp.int32]
-      for op_axis, idxs_axis, shape, idxs, dnums, slice_sizes in [
+  @parameterized.named_parameters({"testcase_name": f"_shape={jtu.format_shape_dtype_string(shape, dtype)}_op_axis={op_axis}_idxs_axis={idxs_axis}_idxs={idxs}_dnums={dnums}_slice_sizes={slice_sizes}", "op_axis": op_axis, "idxs_axis": idxs_axis, "shape": shape, "dtype": dtype, "idxs": idxs, "dnums": dnums, "slice_sizes": slice_sizes, "rng_factory": rng_factory, "rng_idx_factory": rng_idx_factory} for dtype in [onp.float32, onp.int32] for op_axis, idxs_axis, shape, idxs, dnums, slice_sizes in [
           (0, 0, (2, 5), onp.array([[[0], [2]], [[1], [3]]]),
            lax.GatherDimensionNumbers(
              offset_dims=(), collapsed_slice_dims=(0,), start_index_map=(0,)),
@@ -821,9 +773,7 @@ class BatchingTest(jtu.JaxTestCase):
           lax.GatherDimensionNumbers(
             offset_dims=(1,), collapsed_slice_dims=(0,), start_index_map=(0, 1)),
            (1, 3)),
-      ]
-      for rng_idx_factory in [partial(jtu.rand_int, max(shape))]
-      for rng_factory in [jtu.rand_default])
+      ] for rng_idx_factory in [partial(jtu.rand_int, max(shape))] for rng_factory in [jtu.rand_default])
   def testGatherBatchedBoth(self, op_axis, idxs_axis, shape, dtype, idxs, dnums,
                             slice_sizes, rng_factory, rng_idx_factory):
     rng = rng_factory()
@@ -837,15 +787,7 @@ class BatchingTest(jtu.JaxTestCase):
                           for i in range(idxs.shape[idxs_axis])])
     self.assertAllClose(ans, expected, check_dtypes=False)
 
-  @parameterized.named_parameters(
-      {"testcase_name": "_shape={}_op_axis={}_idxs_axis={}_idxs={}_dnums={}_slice_sizes={}".format(
-          jtu.format_shape_dtype_string(shape, dtype), op_axis, idxs_axis, idxs,
-          dnums, slice_sizes),
-       "op_axis": op_axis, "idxs_axis": idxs_axis, "shape": shape, "dtype":
-       dtype, "idxs": idxs, "dnums": dnums, "slice_sizes": slice_sizes,
-       "rng_factory": rng_factory, "rng_idx_factory": rng_idx_factory}
-      for dtype in [onp.float32]
-      for op_axis, idxs_axis, shape, idxs, dnums, slice_sizes in [
+  @parameterized.named_parameters({"testcase_name": f"_shape={jtu.format_shape_dtype_string(shape, dtype)}_op_axis={op_axis}_idxs_axis={idxs_axis}_idxs={idxs}_dnums={dnums}_slice_sizes={slice_sizes}", "op_axis": op_axis, "idxs_axis": idxs_axis, "shape": shape, "dtype": dtype, "idxs": idxs, "dnums": dnums, "slice_sizes": slice_sizes, "rng_factory": rng_factory, "rng_idx_factory": rng_idx_factory} for dtype in [onp.float32] for op_axis, idxs_axis, shape, idxs, dnums, slice_sizes in [
           (0, 0, (2, 5), onp.array([[[0], [2]], [[1], [3]]]),
            lax.GatherDimensionNumbers(
              offset_dims=(), collapsed_slice_dims=(0,), start_index_map=(0,)),
@@ -863,9 +805,7 @@ class BatchingTest(jtu.JaxTestCase):
           lax.GatherDimensionNumbers(
             offset_dims=(1,), collapsed_slice_dims=(0,), start_index_map=(0, 1)),
            (1, 3)),
-      ]
-      for rng_idx_factory in [partial(jtu.rand_int, max(shape))]
-      for rng_factory in [jtu.rand_default])
+      ] for rng_idx_factory in [partial(jtu.rand_int, max(shape))] for rng_factory in [jtu.rand_default])
   def testGatherGradBatchedBoth(self, op_axis, idxs_axis, shape, dtype, idxs, dnums,
                                 slice_sizes, rng_factory, rng_idx_factory):
     rng = rng_factory()

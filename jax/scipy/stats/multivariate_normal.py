@@ -30,8 +30,7 @@ def logpdf(x, mean, cov):
   det_sig = det(cov).astype(cov.dtype)
   log_normalizer = lax.log(lax.mul(lax.pow(_constant_like(x, 2 * onp.pi), dim),
     det_sig))
-  x_shape = x.shape[:-1]
-  if x_shape:
+  if x_shape := x.shape[:-1]:
     x_2d = x.reshape((-1, mean.shape[0]))
     quadratic = einsum("ij,jk,ik->i", subtract(x_2d, mean), inv(cov), 
       subtract(x_2d, mean)).reshape(x_shape).astype(cov.dtype)

@@ -92,10 +92,7 @@ def eigh(a, b=None, lower=True, eigvals_only=False, overwrite_a=False,
   a = np_linalg._promote_arg_dtypes(np.asarray(a))
   v, w = lax_linalg.eigh(a, lower=lower)
 
-  if eigvals_only:
-    return w
-  else:
-    return w, v
+  return w if eigvals_only else (w, v)
 
 
 @_wraps(scipy.linalg.inv)
@@ -129,10 +126,7 @@ def _lu(a, permute_l):
   k = min(m, n)
   l = np.tril(lu, -1)[:, :k] + np.eye(m, k, dtype=dtype)
   u = np.triu(lu)[:k, :]
-  if permute_l:
-    return np.matmul(p, l), u
-  else:
-    return p, l, u
+  return (np.matmul(p, l), u) if permute_l else (p, l, u)
 
 @_wraps(scipy.linalg.lu, update_doc=False)
 def lu(a, permute_l=False, overwrite_a=False, check_finite=True):
@@ -149,12 +143,10 @@ def _qr(a, mode, pivoting):
   elif mode == "economic":
     full_matrices = False
   else:
-    raise ValueError("Unsupported QR decomposition mode '{}'".format(mode))
+    raise ValueError(f"Unsupported QR decomposition mode '{mode}'")
   a = np_linalg._promote_arg_dtypes(np.asarray(a))
   q, r = lax_linalg.qr(a, full_matrices)
-  if mode == "r":
-    return r
-  return q, r
+  return r if mode == "r" else (q, r)
 
 @_wraps(scipy.linalg.qr)
 def qr(a, overwrite_a=False, lwork=None, mode="full", pivoting=False,
@@ -195,14 +187,14 @@ def solve(a, b, sym_pos=False, lower=False, overwrite_a=False, overwrite_b=False
 
 @partial(jit, static_argnums=(2, 3, 4))
 def _solve_triangular(a, b, trans, lower, unit_diagonal):
-  if trans == 0 or trans == "N":
+  if trans in [0, "N"]:
     transpose_a, conjugate_a = False, False
-  elif trans == 1 or trans == "T":
+  elif trans in [1, "T"]:
     transpose_a, conjugate_a = True, False
-  elif trans == 2 or trans == "C":
+  elif trans in [2, "C"]:
     transpose_a, conjugate_a = True, True
   else:
-    raise ValueError("Invalid 'trans' value {}".format(trans))
+    raise ValueError(f"Invalid 'trans' value {trans}")
 
   a, b = np_linalg._promote_arg_dtypes(np.asarray(a), np.asarray(b))
 
@@ -214,10 +206,7 @@ def _solve_triangular(a, b, trans, lower, unit_diagonal):
                                     transpose_a=transpose_a,
                                     conjugate_a=conjugate_a,
                                     unit_diagonal=unit_diagonal)
-  if b_is_vector:
-    return out[..., 0]
-  else:
-    return out
+  return out[..., 0] if b_is_vector else out
 
 @_wraps(scipy.linalg.solve_triangular)
 def solve_triangular(a, b, trans=0, lower=False, unit_diagonal=False,
@@ -252,44 +241,41 @@ def _expm(A, upper_triangular=False):
 
 @jit
 def _calc_P_Q(A):
-    A = np.asarray(A)
-    if A.ndim != 2 or A.shape[0] != A.shape[1]:
-        raise ValueError('expected A to be a square matrix')
-    A_L1 = np_linalg.norm(A,1)
-    n_squarings = 0
-    if A.dtype == 'float64' or A.dtype == 'complex128':
-       U3,V3 = _pade3(A)
-       U5,V5 = _pade5(A)
-       U7,V7 = _pade7(A)
-       U9,V9 = _pade9(A)
-       maxnorm = 5.371920351148152
-       n_squarings = np.maximum(0, np.floor(np.log2(A_L1 / maxnorm)))
-       A = A / 2**n_squarings
-       U13,V13 = _pade13(A)
-       conds=np.array([1.495585217958292e-002, 2.539398330063230e-001, 9.504178996162932e-001, 2.097847961257068e+000])
-       U = np.select((maxnorm<conds),(U3,U5,U7,U9),U13)
-       V = np.select((maxnorm<conds),(V3,V5,V7,V9),V13)
-    elif A.dtype == 'float32' or A.dtype == 'complex64':
-        U3,V3 = _pade3(A)
-        U5,V5 = _pade5(A)
-        maxnorm = 3.925724783138660
-        n_squarings = np.maximum(0, np.floor(np.log2(A_L1 / maxnorm)))
-        A = A / 2**n_squarings
-        U7,V7 = _pade7(A)
-        conds=np.array([4.258730016922831e-001, 1.880152677804762e+000])
-        U = np.select((maxnorm<conds),(U3,U5),U7)
-        V = np.select((maxnorm<conds),(V3,V5),V7)
-    else:
-        raise TypeError("A.dtype={} is not supported.".format(A.dtype))
-    P = U + V  # p_m(A) : numerator
-    Q = -U + V # q_m(A) : denominator
-    return P,Q,n_squarings
+  A = np.asarray(A)
+  if A.ndim != 2 or A.shape[0] != A.shape[1]:
+      raise ValueError('expected A to be a square matrix')
+  A_L1 = np_linalg.norm(A,1)
+  n_squarings = 0
+  if A.dtype in ['float64', 'complex128']:
+    U3,V3 = _pade3(A)
+    U5,V5 = _pade5(A)
+    U7,V7 = _pade7(A)
+    U9,V9 = _pade9(A)
+    maxnorm = 5.371920351148152
+    n_squarings = np.maximum(0, np.floor(np.log2(A_L1 / maxnorm)))
+    A = A / 2**n_squarings
+    U13,V13 = _pade13(A)
+    conds=np.array([1.495585217958292e-002, 2.539398330063230e-001, 9.504178996162932e-001, 2.097847961257068e+000])
+    U = np.select((maxnorm<conds),(U3,U5,U7,U9),U13)
+    V = np.select((maxnorm<conds),(V3,V5,V7,V9),V13)
+  elif A.dtype in ['float32', 'complex64']:
+    U3,V3 = _pade3(A)
+    U5,V5 = _pade5(A)
+    maxnorm = 3.925724783138660
+    n_squarings = np.maximum(0, np.floor(np.log2(A_L1 / maxnorm)))
+    A = A / 2**n_squarings
+    U7,V7 = _pade7(A)
+    conds=np.array([4.258730016922831e-001, 1.880152677804762e+000])
+    U = np.select((maxnorm<conds),(U3,U5),U7)
+    V = np.select((maxnorm<conds),(V3,V5),V7)
+  else:
+    raise TypeError(f"A.dtype={A.dtype} is not supported.")
+  P = U + V  # p_m(A) : numerator
+  Q = -U + V # q_m(A) : denominator
+  return P,Q,n_squarings
 
 def _solve_P_Q(P, Q, upper_triangular=False):
-    if upper_triangular:
-        return solve_triangular(Q, P)
-    else:
-        return np_linalg.solve(Q,P)
+  return solve_triangular(Q, P) if upper_triangular else np_linalg.solve(Q,P)
 
 @jit
 def _squaring(R, n_squarings):
@@ -355,14 +341,13 @@ def _pade13(A):
 @_wraps(scipy.linalg.block_diag)
 @jit
 def block_diag(*arrs):
-  if len(arrs) == 0:
+  if not arrs:
     arrs = [np.zeros((1, 0))]
   arrs = np._promote_dtypes(*arrs)
-  bad_shapes = [i for i, a in enumerate(arrs) if np.ndim(a) > 2]
-  if bad_shapes:
-    raise ValueError("Arguments to jax.scipy.linalg.block_diag must have at "
-                     "most 2 dimensions, got {} at argument {}."
-                     .format(arrs[bad_shapes[0]], bad_shapes[0]))
+  if bad_shapes := [i for i, a in enumerate(arrs) if np.ndim(a) > 2]:
+    raise ValueError(
+        f"Arguments to jax.scipy.linalg.block_diag must have at most 2 dimensions, got {arrs[bad_shapes[0]]} at argument {bad_shapes[0]}."
+    )
   arrs = [np.atleast_2d(a) for a in arrs]
   acc = arrs[0]
   dtype = lax.dtype(acc)

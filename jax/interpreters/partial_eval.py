@@ -285,13 +285,13 @@ class JaxprTracer(Tracer):
     pv, const = pval
     if isinstance(const, Tracer) and const._trace.level >= trace.level:
       trace.escaped_tracer_error(
-        "Tracer from a higher level: {} in trace {}".format(const, trace))
+          f"Tracer from a higher level: {const} in trace {trace}")
     self._trace = trace
     self.pval = pval
     self.recipe = recipe
 
   def __repr__(self):
-    return 'Traced<{}:{}>'.format(self.aval, self._trace)
+    return f'Traced<{self.aval}:{self._trace}>'
 
   @property
   def aval(self):
@@ -300,21 +300,17 @@ class JaxprTracer(Tracer):
 
   @property
   def parents(self):
-    if isinstance(self.recipe, JaxprEqnRecipe):
-      return self.recipe.invars
-    else:
-      return []
+    return self.recipe.invars if isinstance(self.recipe, JaxprEqnRecipe) else []
 
   def ispure(self):
     pv, _ = self.pval
     return pv is None  # or pv is core.abstract_unit
 
   def full_lower(self):
-    if self.ispure():
-      _, const = self.pval
-      return core.full_lower(const)
-    else:
+    if not self.ispure():
       return self
+    _, const = self.pval
+    return core.full_lower(const)
 
 class PartialVal(tuple):
   def __new__(cls, xs):
@@ -360,7 +356,7 @@ def trace_to_jaxpr(fun, pvals, instantiate=False, stage_out_calls=False, bottom=
 
 @lu.transformation
 def trace_to_subjaxpr(master, instantiate, pvals):
-  assert all([isinstance(pv, PartialVal) for pv in pvals]), pvals
+  assert all(isinstance(pv, PartialVal) for pv in pvals), pvals
   trace = JaxprTrace(master, core.cur_sublevel())
   in_tracers = map(trace.new_arg, pvals)
   ans = yield in_tracers, {}
@@ -439,8 +435,8 @@ def tracers_to_jaxpr(in_tracers, out_tracers):
         eqns.append(recipe_to_eqn(newvar, getvar, recipe))
         processed_eqn_ids.add(recipe.eqn_id)
     elif isinstance(recipe, LambdaBinding):
-      if not any(t is in_tracer for in_tracer in in_tracers):
-        t._trace.escaped_tracer_error("Tracer not among input tracers {}".format(t))
+      if all(t is not in_tracer for in_tracer in in_tracers):
+        t._trace.escaped_tracer_error(f"Tracer not among input tracers {t}")
       assert in_tracers, "Lambda binding with no args"
     elif isinstance(recipe, FreeVar):
       env[getvar(t)] = recipe.val
@@ -622,11 +618,10 @@ def _reconstruct_pval(pval1, const2, unknown):
   pv1, const1 = pval1
   if unknown or pv1 is None:
     return pval1
+  if type(pv1) is ConcreteArray:
+    return PartialVal((None, pv1.val))
   else:
-    if type(pv1) is ConcreteArray:
-      return PartialVal((None, pv1.val))
-    else:
-      return PartialVal((None, const2))
+    return PartialVal((None, const2))
 
 # TODO(mattjj): for https://github.com/google/jax/pull/1749 we allowed
 # standard_abstract_eval to perform concrete evaluation (i.e. FLOPs), but we
@@ -653,9 +648,8 @@ def move_binders_to_front(typed_jaxpr, to_move):
   new_jaxpr = core.Jaxpr((), new_invars, typed_jaxpr.jaxpr.outvars,
                          typed_jaxpr.jaxpr.eqns)
   new_in_avals = _move_to_front(typed_jaxpr.in_avals, to_move)
-  new_typed_jaxpr = core.TypedJaxpr(new_jaxpr, typed_jaxpr.literals,
-                                    new_in_avals, typed_jaxpr.out_avals)
-  return new_typed_jaxpr
+  return core.TypedJaxpr(new_jaxpr, typed_jaxpr.literals, new_in_avals,
+                         typed_jaxpr.out_avals)
 
 def _move_to_front(lst, to_move):
   return ([elt for elt, move in zip(lst, to_move) if move] +

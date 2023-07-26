@@ -89,10 +89,7 @@ def mask_subtrace(master, in_vals, shape_exprs):
   yield out_vals, out_shapes
 
 def ensure_poly(p):
-  if isinstance(p, Poly):
-    return p
-
-  return constant_poly(int(p))
+  return p if isinstance(p, Poly) else constant_poly(int(p))
 
 class Poly(Counter):
   """Polynomial with integer coefficients,
@@ -104,7 +101,7 @@ class Poly(Counter):
   def __init__(self, coeffs):
     # Makes sure Polynomials are always in canonical form to simplify operators:
     coeffs = {mon: coeff for mon, coeff in coeffs.items() if coeff != 0}
-    coeffs = {Mon(): 0} if len(coeffs) == 0 else coeffs
+    coeffs = {Mon(): 0} if not coeffs else coeffs
     super().__init__(coeffs)
 
   def __add__(self, other):
@@ -122,9 +119,9 @@ class Poly(Counter):
     return Poly({mon: -coeff for mon, coeff in self.items()})
 
   def __mul__(self, other):
-    coeffs = dict()
+    coeffs = {}
     for (mon1, coeff1), (mon2, coeff2) \
-            in it.product(self.items(), ensure_poly(other).items()):
+              in it.product(self.items(), ensure_poly(other).items()):
       mon = Mon(mon1 + mon2)                        # add monomials' id degrees
       coeff = coeff1 * coeff2                       # multiply integer coeffs
       coeffs[mon] = coeffs.get(mon, 0) + coeff  # accumulate coeffs
@@ -177,10 +174,11 @@ class Poly(Counter):
   def __ge__(self, other):
     other = ensure_poly(other)
 
-    if other.is_constant and self.is_constant:
-      return int(self) >= int(other)
+    if other.is_constant:
+      if self.is_constant:
+        return int(self) >= int(other)
 
-    if other.is_constant and int(other) <= 1:
+      if int(other) <= 1:
         # Assume polynomials > 0, allowing to use shape rules of binops, conv:
         return True
 
@@ -190,8 +188,8 @@ class Poly(Counter):
     if self == other:
       return True
 
-    raise ValueError('Polynomials comparison "{} >= {}" is inconclusive.'
-                     .format(self, other))
+    raise ValueError(
+        f'Polynomials comparison "{self} >= {other}" is inconclusive.')
 
   def __le__(self, other):
     return ensure_poly(other) >= self
@@ -203,7 +201,7 @@ class Poly(Counter):
     return not (ensure_poly(other) >= self)
 
   def __str__(self):
-    return ' + '.join('{} {}'.format(v, k) if (v != 1 or k.degree == 0) else str(k)
+    return ' + '.join(f'{v} {k}' if (v != 1 or k.degree == 0) else str(k)
                       for k, v in sorted(self.items())).strip()
 
   def __int__(self):
@@ -223,7 +221,7 @@ class Mon(Counter):  # type Mon = Map Id Int -- ids to degrees
     return hash(tuple(self.items()))
 
   def __str__(self):
-    return ' '.join('{}**{}'.format(k, v) if v != 1 else str(k)
+    return ' '.join(f'{k}**{v}' if v != 1 else str(k)
                     for k, v in sorted(self.items()))
 
   def __lt__(self, other):
@@ -284,7 +282,7 @@ class ShapeSyntaxError(Exception): pass
 
 class ShapeSpec(tuple):
   def __str__(self):
-    return 'ShapeSpec({})'.format(', '.join(map(str, self)))
+    return f"ShapeSpec({', '.join(map(str, self))})"
 
 def finalize_spec(spec, shape):
   return tuple(parse_lit(d) if e is monomorphic_dim else e
@@ -357,10 +355,7 @@ class MaskTracer(Tracer):
     return all(ensure_poly(poly).is_constant for poly in self.shape_expr)
 
   def full_lower(self):
-    if self.is_pure():
-      return core.full_lower(self.val)
-    else:
-      return self
+    return core.full_lower(self.val) if self.is_pure() else self
 
 class MaskTrace(Trace):
   def pure(self, val):
@@ -456,7 +451,7 @@ class ShapeCheckTrace(Trace):
     avals = [t.aval for t in tracers]
     shape_rule = shape_rules.get(primitive)
     if shape_rule is None:
-      raise NotImplementedError('Shape rule for {} not implemented yet.'.format(primitive))
+      raise NotImplementedError(f'Shape rule for {primitive} not implemented yet.')
     out_shape = shape_rule(*avals, **params)
     return ShapeCheckTracer(self, out_shape)
 

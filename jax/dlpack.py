@@ -26,8 +26,7 @@ def to_dlpack(x):
     x: a `DeviceArray`, on either CPU or GPU.
   """
   if not isinstance(x, xla.DeviceArray):
-    raise TypeError("Argument to to_dlpack must be a DeviceArray, got {}"
-                    .format(type(x)))
+    raise TypeError(f"Argument to to_dlpack must be a DeviceArray, got {type(x)}")
   buf = xla._force(x).device_buffer
   return xla_client._xla.BufferToDLPackManagedTensor(buf)
 

@@ -45,7 +45,7 @@ class AnObject(object):
     return hash((self.x, self.y, self.z))
 
   def __repr__(self):
-    return "AnObject({},{},{})".format(self.x, self.y, self.z)
+    return f"AnObject({self.x},{self.y},{self.z})"
 
 
 tree_util.register_pytree_node(AnObject, lambda o: ((o.x, o.y), o.z),

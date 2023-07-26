@@ -48,8 +48,7 @@ def _get_fftn_test_axes(shape):
     axes.append(None)
   for naxes in range(1, min(ndims, 3) + 1):
     axes.extend(itertools.combinations(range(ndims), naxes))
-  for index in range(1, ndims + 1):
-    axes.append((-index,))
+  axes.extend((-index, ) for index in range(1, ndims + 1))
   return axes
 
 
@@ -89,17 +88,7 @@ def _zero_for_irfft(z, axes):
 
 class FftTest(jtu.JaxTestCase):
 
-  @parameterized.named_parameters(jtu.cases_from_list(
-      {"testcase_name": "_inverse={}_real={}_shape={}_axes={}".format(
-          inverse, real, jtu.format_shape_dtype_string(shape, dtype), axes),
-       "axes": axes, "shape": shape, "dtype": dtype,
-       "rng_factory": rng_factory, "inverse": inverse, "real": real}
-      for inverse in [False, True]
-      for real in [False, True]
-      for rng_factory in [jtu.rand_default]
-      for dtype in (real_dtypes if real and not inverse else all_dtypes)
-      for shape in [(10,), (10, 10), (9,), (2, 3, 4), (2, 3, 4, 5)]
-      for axes in _get_fftn_test_axes(shape)))
+  @parameterized.named_parameters(jtu.cases_from_list({"testcase_name": f"_inverse={inverse}_real={real}_shape={jtu.format_shape_dtype_string(shape, dtype)}_axes={axes}", "axes": axes, "shape": shape, "dtype": dtype, "rng_factory": rng_factory, "inverse": inverse, "real": real} for inverse in [False, True] for real in [False, True] for rng_factory in [jtu.rand_default] for dtype in (real_dtypes if real and not inverse else all_dtypes) for shape in [(10,), (10, 10), (9,), (2, 3, 4), (2, 3, 4, 5)] for axes in _get_fftn_test_axes(shape)))
   def testFftn(self, inverse, real, shape, dtype, axes, rng_factory):
     rng = rng_factory()
     args_maker = lambda: (rng(shape, dtype),)
@@ -117,52 +106,39 @@ class FftTest(jtu.JaxTestCase):
       tol = 0.15
       jtu.check_grads(np_fn, args_maker(), order=2, atol=tol, rtol=tol)
 
-  @parameterized.named_parameters(jtu.cases_from_list(
-      {"testcase_name": "_inverse={}_real={}".format(inverse, real),
-       "inverse": inverse, "real": real}
-      for inverse in [False, True]
-      for real in [False, True]))
+  @parameterized.named_parameters(jtu.cases_from_list({"testcase_name": f"_inverse={inverse}_real={real}", "inverse": inverse, "real": real} for inverse in [False, True] for real in [False, True]))
   def testFftnErrors(self, inverse, real):
     rng = jtu.rand_default()
     name = 'fftn'
     if real:
-      name = 'r' + name
+      name = f'r{name}'
     if inverse:
-      name = 'i' + name
+      name = f'i{name}'
     func = _get_fftn_func(np.fft, inverse, real)
     self.assertRaisesRegex(
         ValueError,
-        "jax.np.fft.{} only supports 1D, 2D, and 3D FFTs. "
-        "Got axes None with input rank 4.".format(name),
-        lambda: func(rng([2, 3, 4, 5], dtype=onp.float64), axes=None))
+        f"jax.np.fft.{name} only supports 1D, 2D, and 3D FFTs. Got axes None with input rank 4.",
+        lambda: func(rng([2, 3, 4, 5], dtype=onp.float64), axes=None),
+    )
     self.assertRaisesRegex(
         ValueError,
-        "jax.np.fft.{} does not support repeated axes. Got axes \\[1, 1\\].".format(name),
-        lambda: func(rng([2, 3], dtype=onp.float64), axes=[1, 1]))
+        f"jax.np.fft.{name} does not support repeated axes. Got axes \\[1, 1\\].",
+        lambda: func(rng([2, 3], dtype=onp.float64), axes=[1, 1]),
+    )
     self.assertRaises(
         ValueError, lambda: func(rng([2, 3], dtype=onp.float64), axes=[2]))
     self.assertRaises(
         ValueError, lambda: func(rng([2, 3], dtype=onp.float64), axes=[-3]))
 
-  @parameterized.named_parameters(jtu.cases_from_list(
-      {"testcase_name": "_inverse={}_real={}_shape={}_axis={}".format(
-          inverse, real, jtu.format_shape_dtype_string(shape, dtype), axis),
-       "axis": axis, "shape": shape, "dtype": dtype,
-       "rng_factory": rng_factory, "inverse": inverse, "real": real}
-      for inverse in [False, True]
-      for real in [False, True]
-      for rng_factory in [jtu.rand_default]
-      for dtype in (real_dtypes if real and not inverse else all_dtypes)
-      for shape in [(10,)]
-      for axis in [-1, 0]))
+  @parameterized.named_parameters(jtu.cases_from_list({"testcase_name": f"_inverse={inverse}_real={real}_shape={jtu.format_shape_dtype_string(shape, dtype)}_axis={axis}", "axis": axis, "shape": shape, "dtype": dtype, "rng_factory": rng_factory, "inverse": inverse, "real": real} for inverse in [False, True] for real in [False, True] for rng_factory in [jtu.rand_default] for dtype in (real_dtypes if real and not inverse else all_dtypes) for shape in [(10,)] for axis in [-1, 0]))
   def testFft(self, inverse, real, shape, dtype, axis, rng_factory):
     rng = rng_factory()
     args_maker = lambda: (rng(shape, dtype),)
     name = 'fft'
     if real:
-      name = 'r' + name
+      name = f'r{name}'
     if inverse:
-      name = 'i' + name
+      name = f'i{name}'
     np_op = getattr(np.fft, name)
     onp_op = getattr(onp.fft, name)
     np_fn = lambda a: np_op(a, axis=axis)
@@ -172,58 +148,40 @@ class FftTest(jtu.JaxTestCase):
                             tol=1e-4)
     self._CompileAndCheck(np_op, args_maker, check_dtypes=True)
 
-  @parameterized.named_parameters(jtu.cases_from_list(
-      {"testcase_name": "_inverse={}_real={}".format(inverse, real),
-       "inverse": inverse, "real": real}
-      for inverse in [False, True]
-      for real in [False, True]))
+  @parameterized.named_parameters(jtu.cases_from_list({"testcase_name": f"_inverse={inverse}_real={real}", "inverse": inverse, "real": real} for inverse in [False, True] for real in [False, True]))
   def testFftErrors(self, inverse, real):
     rng = jtu.rand_default()
     name = 'fft'
     if real:
-      name = 'r' + name
+      name = f'r{name}'
     if inverse:
-      name = 'i' + name
+      name = f'i{name}'
     func = getattr(np.fft, name)
 
     self.assertRaisesRegex(
-      ValueError,
-      "jax.np.fft.{} does not support multiple axes. "
-      "Please use jax.np.fft.{}n. "
-      "Got axis = \\[1, 1\\].".format(name, name),
-      lambda: func(rng([2, 3], dtype=onp.float64), axis=[1, 1])
+        ValueError,
+        f"jax.np.fft.{name} does not support multiple axes. Please use jax.np.fft.{name}n. Got axis = \\[1, 1\\].",
+        lambda: func(rng([2, 3], dtype=onp.float64), axis=[1, 1]),
     )
     self.assertRaisesRegex(
-      ValueError,
-      "jax.np.fft.{} does not support multiple axes. "
-      "Please use jax.np.fft.{}n. "
-      "Got axis = \\(1, 1\\).".format(name, name),
-      lambda: func(rng([2, 3], dtype=onp.float64), axis=(1, 1))
+        ValueError,
+        f"jax.np.fft.{name} does not support multiple axes. Please use jax.np.fft.{name}n. Got axis = \\(1, 1\\).",
+        lambda: func(rng([2, 3], dtype=onp.float64), axis=(1, 1)),
     )
     self.assertRaises(
         ValueError, lambda: func(rng([2, 3], dtype=onp.float64), axis=[2]))
     self.assertRaises(
         ValueError, lambda: func(rng([2, 3], dtype=onp.float64), axis=[-3]))
 
-  @parameterized.named_parameters(jtu.cases_from_list(
-      {"testcase_name": "_inverse={}_real={}_shape={}_axes={}".format(
-          inverse, real, jtu.format_shape_dtype_string(shape, dtype), axes),
-       "axes": axes, "shape": shape, "dtype": dtype,
-       "rng_factory": rng_factory, "inverse": inverse, "real": real}
-      for inverse in [False, True]
-      for real in [False, True]
-      for rng_factory in [jtu.rand_default]
-      for dtype in (real_dtypes if real and not inverse else all_dtypes)
-      for shape in [(16, 8, 4, 8), (16, 8, 4, 8, 4)]
-      for axes in [(-2, -1), (0, 1), (1, 3), (-1, 2)]))
+  @parameterized.named_parameters(jtu.cases_from_list({"testcase_name": f"_inverse={inverse}_real={real}_shape={jtu.format_shape_dtype_string(shape, dtype)}_axes={axes}", "axes": axes, "shape": shape, "dtype": dtype, "rng_factory": rng_factory, "inverse": inverse, "real": real} for inverse in [False, True] for real in [False, True] for rng_factory in [jtu.rand_default] for dtype in (real_dtypes if real and not inverse else all_dtypes) for shape in [(16, 8, 4, 8), (16, 8, 4, 8, 4)] for axes in [(-2, -1), (0, 1), (1, 3), (-1, 2)]))
   def testFft2(self, inverse, real, shape, dtype, axes, rng_factory):
     rng = rng_factory()
     args_maker = lambda: (rng(shape, dtype),)
     name = 'fft2'
     if real:
-      name = 'r' + name
+      name = f'r{name}'
     if inverse:
-      name = 'i' + name
+      name = f'i{name}'
     np_op = getattr(np.fft, name)
     onp_op = getattr(onp.fft, name)
     # Numpy promotes to complex128 aggressively.
@@ -231,45 +189,32 @@ class FftTest(jtu.JaxTestCase):
                             tol=1e-4)
     self._CompileAndCheck(np_op, args_maker, check_dtypes=True)
 
-  @parameterized.named_parameters(jtu.cases_from_list(
-      {"testcase_name": "_inverse={}_real={}".format(inverse, real),
-       "inverse": inverse, "real": real}
-      for inverse in [False, True]
-      for real in [False, True]))
+  @parameterized.named_parameters(jtu.cases_from_list({"testcase_name": f"_inverse={inverse}_real={real}", "inverse": inverse, "real": real} for inverse in [False, True] for real in [False, True]))
   def testFft2Errors(self, inverse, real):
     rng = jtu.rand_default()
     name = 'fft2'
     if real:
-      name = 'r' + name
+      name = f'r{name}'
     if inverse:
-      name = 'i' + name
+      name = f'i{name}'
     func = getattr(np.fft, name)
 
     self.assertRaisesRegex(
-      ValueError,
-      "jax.np.fft.{} only supports 2 axes. "
-      "Got axes = \\[0\\].".format(name, name),
-      lambda: func(rng([2, 3], dtype=onp.float64), axes=[0])
+        ValueError,
+        f"jax.np.fft.{name} only supports 2 axes. Got axes = \\[0\\].",
+        lambda: func(rng([2, 3], dtype=onp.float64), axes=[0]),
     )
     self.assertRaisesRegex(
-      ValueError,
-      "jax.np.fft.{} only supports 2 axes. "
-      "Got axes = \\(0, 1, 2\\).".format(name, name),
-      lambda: func(rng([2, 3, 3], dtype=onp.float64), axes=(0, 1, 2))
+        ValueError,
+        f"jax.np.fft.{name} only supports 2 axes. Got axes = \\(0, 1, 2\\).",
+        lambda: func(rng([2, 3, 3], dtype=onp.float64), axes=(0, 1, 2)),
     )
     self.assertRaises(
       ValueError, lambda: func(rng([2, 3], dtype=onp.float64), axes=[2, 3]))
     self.assertRaises(
       ValueError, lambda: func(rng([2, 3], dtype=onp.float64), axes=[-3, -4]))
 
-  @parameterized.named_parameters(jtu.cases_from_list(
-    {"testcase_name": "_size={}_d={}".format(
-      jtu.format_shape_dtype_string([size], dtype), d),
-      "dtype": dtype, "size": size, "rng_factory": rng_factory, "d": d}
-    for rng_factory in [jtu.rand_default]
-    for dtype in all_dtypes
-    for size in [9, 10, 101, 102]
-    for d in [0.1, 2.]))
+  @parameterized.named_parameters(jtu.cases_from_list({"testcase_name": f"_size={jtu.format_shape_dtype_string([size], dtype)}_d={d}", "dtype": dtype, "size": size, "rng_factory": rng_factory, "d": d} for rng_factory in [jtu.rand_default] for dtype in all_dtypes for size in [9, 10, 101, 102] for d in [0.1, 2.]))
   def testFftfreq(self, size, d, dtype, rng_factory):
     rng = rng_factory()
     args_maker = lambda: (rng([size], dtype),)
@@ -286,34 +231,22 @@ class FftTest(jtu.JaxTestCase):
       tol = 0.15  # TODO(skye): can we be more precise?
       jtu.check_grads(np_fn, args_maker(), order=2, atol=tol, rtol=tol)
 
-  @parameterized.named_parameters(jtu.cases_from_list(
-    {"testcase_name": "_n={}".format(n),
-     "n": n}
-    for n in [[0,1,2]]))
+  @parameterized.named_parameters(jtu.cases_from_list({"testcase_name": f"_n={n}", "n": n} for n in [[0,1,2]]))
   def testFftfreqErrors(self, n):
     name = 'fftfreq'
     func = np.fft.fftfreq
     self.assertRaisesRegex(
-      ValueError,
-      "The n argument of jax.np.fft.{} only takes an int. "
-      "Got n = \\[0, 1, 2\\].".format(name),
-      lambda: func(n=n)
+        ValueError,
+        f"The n argument of jax.np.fft.{name} only takes an int. Got n = \\[0, 1, 2\\].",
+        lambda: func(n=n),
     )
     self.assertRaisesRegex(
-      ValueError,
-      "The d argument of jax.np.fft.{} only takes a single value. "
-      "Got d = \\[0, 1, 2\\].".format(name),
-      lambda: func(n=10, d=n)
+        ValueError,
+        f"The d argument of jax.np.fft.{name} only takes a single value. Got d = \\[0, 1, 2\\].",
+        lambda: func(n=10, d=n),
     )
 
-  @parameterized.named_parameters(jtu.cases_from_list(
-    {"testcase_name": "_size={}_d={}".format(
-      jtu.format_shape_dtype_string([size], dtype), d),
-      "dtype": dtype, "size": size, "rng_factory": rng_factory, "d": d}
-    for rng_factory in [jtu.rand_default]
-    for dtype in all_dtypes
-    for size in [9, 10, 101, 102]
-    for d in [0.1, 2.]))
+  @parameterized.named_parameters(jtu.cases_from_list({"testcase_name": f"_size={jtu.format_shape_dtype_string([size], dtype)}_d={d}", "dtype": dtype, "size": size, "rng_factory": rng_factory, "d": d} for rng_factory in [jtu.rand_default] for dtype in all_dtypes for size in [9, 10, 101, 102] for d in [0.1, 2.]))
   def testRfftfreq(self, size, d, dtype, rng_factory):
     rng = rng_factory()
     args_maker = lambda: (rng([size], dtype),)
@@ -330,34 +263,22 @@ class FftTest(jtu.JaxTestCase):
       tol = 0.15  # TODO(skye): can we be more precise?
       jtu.check_grads(np_fn, args_maker(), order=2, atol=tol, rtol=tol)
 
-  @parameterized.named_parameters(jtu.cases_from_list(
-    {"testcase_name": "_n={}".format(n),
-     "n": n}
-    for n in [[0, 1, 2]]))
+  @parameterized.named_parameters(jtu.cases_from_list({"testcase_name": f"_n={n}", "n": n} for n in [[0, 1, 2]]))
   def testRfftfreqErrors(self, n):
     name = 'rfftfreq'
     func = np.fft.rfftfreq
     self.assertRaisesRegex(
-      ValueError,
-      "The n argument of jax.np.fft.{} only takes an int. "
-      "Got n = \\[0, 1, 2\\].".format(name),
-      lambda: func(n=n)
+        ValueError,
+        f"The n argument of jax.np.fft.{name} only takes an int. Got n = \\[0, 1, 2\\].",
+        lambda: func(n=n),
     )
     self.assertRaisesRegex(
-      ValueError,
-      "The d argument of jax.np.fft.{} only takes a single value. "
-      "Got d = \\[0, 1, 2\\].".format(name),
-      lambda: func(n=10, d=n)
+        ValueError,
+        f"The d argument of jax.np.fft.{name} only takes a single value. Got d = \\[0, 1, 2\\].",
+        lambda: func(n=10, d=n),
     )
 
-  @parameterized.named_parameters(jtu.cases_from_list(
-    {"testcase_name": "dtype={}_axes={}".format(
-      jtu.format_shape_dtype_string(shape, dtype), axes),
-      "dtype": dtype, "shape": shape, "rng_factory": rng_factory, "axes": axes}
-    for rng_factory in [jtu.rand_default]
-    for dtype in all_dtypes
-    for shape in [[9], [10], [101], [102], [3, 5], [3, 17], [5, 7, 11]]
-    for axes in _get_fftn_test_axes(shape)))
+  @parameterized.named_parameters(jtu.cases_from_list({"testcase_name": f"dtype={jtu.format_shape_dtype_string(shape, dtype)}_axes={axes}", "dtype": dtype, "shape": shape, "rng_factory": rng_factory, "axes": axes} for rng_factory in [jtu.rand_default] for dtype in all_dtypes for shape in [[9], [10], [101], [102], [3, 5], [3, 17], [5, 7, 11]] for axes in _get_fftn_test_axes(shape)))
   def testFftshift(self, shape, dtype, rng_factory, axes):
     rng = rng_factory()
     args_maker = lambda: (rng(shape, dtype),)
@@ -365,14 +286,7 @@ class FftTest(jtu.JaxTestCase):
     onp_fn = lambda arg: onp.fft.fftshift(arg, axes=axes)
     self._CheckAgainstNumpy(onp_fn, np_fn, args_maker, check_dtypes=True)
 
-  @parameterized.named_parameters(jtu.cases_from_list(
-    {"testcase_name": "dtype={}_axes={}".format(
-      jtu.format_shape_dtype_string(shape, dtype), axes),
-      "dtype": dtype, "shape": shape, "rng_factory": rng_factory, "axes": axes}
-    for rng_factory in [jtu.rand_default]
-    for dtype in all_dtypes
-    for shape in [[9], [10], [101], [102], [3, 5], [3, 17], [5, 7, 11]]
-    for axes in _get_fftn_test_axes(shape)))
+  @parameterized.named_parameters(jtu.cases_from_list({"testcase_name": f"dtype={jtu.format_shape_dtype_string(shape, dtype)}_axes={axes}", "dtype": dtype, "shape": shape, "rng_factory": rng_factory, "axes": axes} for rng_factory in [jtu.rand_default] for dtype in all_dtypes for shape in [[9], [10], [101], [102], [3, 5], [3, 17], [5, 7, 11]] for axes in _get_fftn_test_axes(shape)))
   def testIfftshift(self, shape, dtype, rng_factory, axes):
     rng = rng_factory()
     args_maker = lambda: (rng(shape, dtype),)

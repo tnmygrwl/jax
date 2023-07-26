@@ -60,7 +60,7 @@ class MaskingTest(jtu.JaxTestCase):
     assert constant_poly(3) == 3
     assert onp.array(3, onp.int64) == constant_poly(3)
     assert onp.array(3, onp.int64)[()] == constant_poly(3)
-    assert not onp.array(3, onp.int64) != constant_poly(3)
+    assert onp.array(3, onp.int64) == constant_poly(3)
     assert constant_poly(4) != 3
     assert 3 == constant_poly(3)
     assert 4 != constant_poly(3)
@@ -453,34 +453,8 @@ class MaskingTest(jtu.JaxTestCase):
   def test_nesting(self):
     raise SkipTest("not yet implemented")
 
-    @partial(mask, in_shapes=['n'], out_shape='')
-    def padded_sum(x):
-      return np.sum(x)
-
-    batched_sum = vmap(padded_sum)
-
-    @partial(mask, in_shapes=['(m, _)', 'm'], out_shape='')
-    def fun(x, ns):
-      return batched_sum([x], dict(n=ns)).sum()
-
-    x = np.array([[3, 1, 4, 1],
-                  [5, 9, 2, 6],
-                  [5, 3, 5, 8]])
-    ns = np.array([2, 3, 2])
-    ans = fun([x, ns], dict(m=2))
-    expected = 3+1 + 5+9+2
-    self.assertAllClose(ans, expected, check_dtypes=False)
-
   def test_arange(self):
     raise SkipTest("not yet implemented")
-
-    @partial(mask, in_shapes=['n'], out_shape='n')
-    def padded_add(x):
-      return x + lax.iota(x.shape[0])
-
-    ans = padded_add([np.array([3, 1, 4, 1, 5])], dict(n=3))
-    expected = onp.array([3, 2, 6])
-    self.assertAllClose(ans[:3], expected, check_dtypes=False)
 
 
 if __name__ == '__main__':

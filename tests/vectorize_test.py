@@ -50,10 +50,7 @@ def center(array):
 
 
 class VectorizeTest(jtu.JaxTestCase):
-  @parameterized.named_parameters(jtu.cases_from_list(
-      {"testcase_name": "_leftshape={}_rightshape={}".format(left_shape, right_shape),
-       "left_shape": left_shape, "right_shape": right_shape, "result_shape": result_shape}
-      for left_shape, right_shape, result_shape in [
+  @parameterized.named_parameters(jtu.cases_from_list({"testcase_name": f"_leftshape={left_shape}_rightshape={right_shape}", "left_shape": left_shape, "right_shape": right_shape, "result_shape": result_shape} for left_shape, right_shape, result_shape in [
           ((2, 3), (3, 4), (2, 4)),
           ((2, 3), (1, 3, 4), (1, 2, 4)),
           ((5, 2, 3), (1, 3, 4), (5, 2, 4)),
@@ -63,10 +60,7 @@ class VectorizeTest(jtu.JaxTestCase):
     self.assertEqual(matmat(np.zeros(left_shape),
                             np.zeros(right_shape)).shape, result_shape)
 
-  @parameterized.named_parameters(jtu.cases_from_list(
-      {"testcase_name": "_leftshape={}_rightshape={}".format(left_shape, right_shape),
-       "left_shape": left_shape, "right_shape": right_shape, "result_shape": result_shape}
-      for left_shape, right_shape, result_shape in [
+  @parameterized.named_parameters(jtu.cases_from_list({"testcase_name": f"_leftshape={left_shape}_rightshape={right_shape}", "left_shape": left_shape, "right_shape": right_shape, "result_shape": result_shape} for left_shape, right_shape, result_shape in [
           ((2, 3), (3,), (2,)),
           ((2, 3), (1, 3), (1, 2)),
           ((4, 2, 3), (1, 3), (4, 2)),
@@ -76,10 +70,7 @@ class VectorizeTest(jtu.JaxTestCase):
     self.assertEqual(matvec(np.zeros(left_shape),
                             np.zeros(right_shape)).shape, result_shape)
 
-  @parameterized.named_parameters(jtu.cases_from_list(
-      {"testcase_name": "_leftshape={}_rightshape={}".format(left_shape, right_shape),
-       "left_shape": left_shape, "right_shape": right_shape, "result_shape": result_shape}
-      for left_shape, right_shape, result_shape in [
+  @parameterized.named_parameters(jtu.cases_from_list({"testcase_name": f"_leftshape={left_shape}_rightshape={right_shape}", "left_shape": left_shape, "right_shape": right_shape, "result_shape": result_shape} for left_shape, right_shape, result_shape in [
           ((3,), (3,), ()),
           ((2, 3), (3,), (2,)),
           ((4, 2, 3), (3,), (4, 2)),
@@ -88,10 +79,7 @@ class VectorizeTest(jtu.JaxTestCase):
     self.assertEqual(vecvec(np.zeros(left_shape),
                             np.zeros(right_shape)).shape, result_shape)
 
-  @parameterized.named_parameters(jtu.cases_from_list(
-      {"testcase_name": "_shape={}".format(shape),
-       "shape": shape, "result_shape": result_shape}
-      for shape, result_shape in [
+  @parameterized.named_parameters(jtu.cases_from_list({"testcase_name": f"_shape={shape}", "shape": shape, "result_shape": result_shape} for shape, result_shape in [
           ((3,), ()),
           ((2, 3,), (2,)),
           ((1, 2, 3,), (1, 2)),
@@ -102,10 +90,7 @@ class VectorizeTest(jtu.JaxTestCase):
         size *= x
     self.assertEqual(magnitude(np.arange(size).reshape(shape)).shape, result_shape)
 
-  @parameterized.named_parameters(jtu.cases_from_list(
-      {"testcase_name": "_shape={}".format(shape),
-       "shape": shape, "result_shape": result_shape}
-      for shape, result_shape in [
+  @parameterized.named_parameters(jtu.cases_from_list({"testcase_name": f"_shape={shape}", "shape": shape, "result_shape": result_shape} for shape, result_shape in [
           ((3,), ()),
           ((2, 3), (2,)),
           ((1, 2, 3, 4), (1, 2, 3)),
@@ -116,10 +101,7 @@ class VectorizeTest(jtu.JaxTestCase):
   def test_mean_axis(self):
       self.assertEqual(mean(np.zeros((2, 3)), axis=0).shape, (3,))
 
-  @parameterized.named_parameters(jtu.cases_from_list(
-      {"testcase_name": "_shape={}".format(shape),
-       "shape": shape, "result_shape": result_shape}
-      for shape, result_shape in [
+  @parameterized.named_parameters(jtu.cases_from_list({"testcase_name": f"_shape={shape}", "shape": shape, "result_shape": result_shape} for shape, result_shape in [
           ((), (2,)),
           ((3,), (3,2,)),
       ]))

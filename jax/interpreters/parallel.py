@@ -75,24 +75,19 @@ class PapplyTracer(Tracer):
   @property
   def aval(self):
     aval = raise_to_shaped(core.get_aval(self.val))
-    if self.axis is not_sharded:
+    if (self.axis is not not_sharded and aval is core.abstract_unit
+        or self.axis is not_sharded):
       return aval
+    elif type(aval) is ShapedArray:
+      assert 0 <= self.axis < aval.ndim + 1
+      new_shape = list(aval.shape)
+      new_shape.insert(self.axis, self.axis_size)
+      return ShapedArray(tuple(new_shape), aval.dtype)
     else:
-      if aval is core.abstract_unit:
-        return aval
-      elif type(aval) is ShapedArray:
-        assert 0 <= self.axis < aval.ndim + 1
-        new_shape = list(aval.shape)
-        new_shape.insert(self.axis, self.axis_size)
-        return ShapedArray(tuple(new_shape), aval.dtype)
-      else:
-        raise TypeError(aval)
+      raise TypeError(aval)
 
   def full_lower(self):
-    if self.axis is not_sharded:
-      return core.full_lower(self.val)
-    else:
-      return self
+    return core.full_lower(self.val) if self.axis is not_sharded else self
 
 class PapplyTrace(Trace):
   def pure(self, val):
@@ -108,12 +103,11 @@ class PapplyTrace(Trace):
     names, vals, axes = unzip3((t.name, t.val, t.axis) for t in tracers)
     if all(axis is not_sharded for axis in axes):
       return primitive.bind(*vals, **params)
-    else:
-      name, = {n for n in names if n is not None}
-      size, = {t.axis_size for t in tracers if t.axis_size is not None}
-      rule = papply_primitive_rules[primitive]
-      val_out, axis_out = rule(name, size, vals, axes, **params)
-      return PapplyTracer(self, name, size, val_out, axis_out)
+    name, = {n for n in names if n is not None}
+    size, = {t.axis_size for t in tracers if t.axis_size is not None}
+    rule = papply_primitive_rules[primitive]
+    val_out, axis_out = rule(name, size, vals, axes, **params)
+    return PapplyTracer(self, name, size, val_out, axis_out)
 
   def process_call(self, call_primitive, f, tracers, params):
     if call_primitive in pe.map_primitives:
@@ -121,13 +115,12 @@ class PapplyTrace(Trace):
     names, vals, axes = unzip3((t.name, t.val, t.axis) for t in tracers)
     if all(axis is not_sharded for axis in axes):
       return call_primitive.bind(f, *vals, **params)
-    else:
-      name, = {n for n in names if n is not None}
-      size, = {t.axis_size for t in tracers if t.axis_size is not None}
-      f_papply, axes_out = papply_subtrace(f, self.master, name, size, axes)
-      vals_out = call_primitive.bind(f_papply, *vals, **params)
-      return [PapplyTracer(self, name, size, x, a)
-              for x, a in zip(vals_out, axes_out())]
+    name, = {n for n in names if n is not None}
+    size, = {t.axis_size for t in tracers if t.axis_size is not None}
+    f_papply, axes_out = papply_subtrace(f, self.master, name, size, axes)
+    vals_out = call_primitive.bind(f_papply, *vals, **params)
+    return [PapplyTracer(self, name, size, x, a)
+            for x, a in zip(vals_out, axes_out())]
 
   def post_process_call(self, call_primitive, out_tracer):
     t = out_tracer

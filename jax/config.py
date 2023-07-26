@@ -49,25 +49,24 @@ class Config(object):
     else:
       self.check_exists(name)
       if name not in self.values:
-        raise Exception("Unrecognized config option: {}".format(name))
+        raise Exception(f"Unrecognized config option: {name}")
       self.values[name] = val
 
   def read(self, name):
     if self.use_absl:
       return getattr(self.absl_flags.FLAGS, name)
-    else:
-      self.check_exists(name)
-      return self.values[name]
+    self.check_exists(name)
+    return self.values[name]
 
   def add_option(self, name, default, opt_type, meta_args, meta_kwargs):
     if name in self.values:
-      raise Exception("Config option {} already defined".format(name))
+      raise Exception(f"Config option {name} already defined")
     self.values[name] = default
     self.meta[name] = (opt_type, meta_args, meta_kwargs)
 
   def check_exists(self, name):
     if name not in self.values:
-      raise Exception("Unrecognized config option: {}".format(name))
+      raise Exception(f"Unrecognized config option: {name}")
 
   def DEFINE_bool(self, name, default, *args, **kwargs):
     self.add_option(name, default, bool, args, kwargs)
